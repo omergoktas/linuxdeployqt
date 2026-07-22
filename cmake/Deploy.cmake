@@ -10,6 +10,11 @@ function(deploy TARGET)
     endif()
 
     set(DEPLOY_PREFIX_PATH ${APP_DEPLOY_PREFIX}/${TARGET}.AppDir)
+    set(APPIMAGE_OUTPUT_ARCH ${CMAKE_SYSTEM_PROCESSOR})
+    if(APPIMAGE_OUTPUT_ARCH STREQUAL "aarch64")
+        set(APPIMAGE_OUTPUT_ARCH arm64)
+    endif()
+    set(APPIMAGE_OUTPUT_PATH ${APP_DEPLOY_PREFIX}/${TARGET}-${APPIMAGE_OUTPUT_ARCH}.AppImage)
 
     find_program(APPIMAGETOOL_EXECUTABLE appimagetool)
     find_program(PATCHELF_EXECUTABLE patchelf REQUIRED)
@@ -76,7 +81,8 @@ function(deploy TARGET)
         --
         $<TARGET_FILE:${TARGET}>
         ${DEPLOY_PREFIX_PATH}/usr/bin/$<TARGET_FILE_NAME:${TARGET}>
-        -appimage -no-translations -qmake=${QMAKE_EXECUTABLE}
+        -appimage -appimage-output=${APPIMAGE_OUTPUT_PATH}
+        -no-translations -qmake=${QMAKE_EXECUTABLE}
         WORKING_DIRECTORY ${APP_DEPLOY_PREFIX}
     )
 endfunction()
