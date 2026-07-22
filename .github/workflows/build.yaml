@@ -51,8 +51,7 @@ jobs:
           -S . \
           -B build-amd64 \
           -G Ninja \
-          -D CMAKE_BUILD_TYPE=Release \
-          -D APP_DEPLOY_OUTPUT_PATH=$GITHUB_WORKSPACE/build-amd64/deploy/linuxdeployqt-x86_64.AppImage
+          -D CMAKE_BUILD_TYPE=Release
         cmake --build build-amd64 --parallel --config Release
         cp build-amd64/deploy/*.AppImage executables
 
@@ -64,8 +63,7 @@ jobs:
           -S . \
           -B build-arm64 \
           -G Ninja \
-          -D CMAKE_BUILD_TYPE=Release \
-          -D APP_DEPLOY_OUTPUT_PATH=$GITHUB_WORKSPACE/build-arm64/deploy/linuxdeployqt-arm64.AppImage
+          -D CMAKE_BUILD_TYPE=Release
         cmake --build build-arm64 --parallel --config Release
         cp build-arm64/deploy/*.AppImage executables
 

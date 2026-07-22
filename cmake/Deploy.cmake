@@ -10,10 +10,6 @@ function(deploy TARGET)
     endif()
 
     set(DEPLOY_PREFIX_PATH ${APP_DEPLOY_PREFIX}/${TARGET}.AppDir)
-    set(APPIMAGE_OUTPUT_ARGUMENT)
-    if(APP_DEPLOY_OUTPUT_PATH)
-        set(APPIMAGE_OUTPUT_ARGUMENT "-appimage-output=${APP_DEPLOY_OUTPUT_PATH}")
-    endif()
 
     find_program(APPIMAGETOOL_EXECUTABLE appimagetool)
     find_program(PATCHELF_EXECUTABLE patchelf REQUIRED)
@@ -80,8 +76,7 @@ function(deploy TARGET)
         --
         $<TARGET_FILE:${TARGET}>
         ${DEPLOY_PREFIX_PATH}/usr/bin/$<TARGET_FILE_NAME:${TARGET}>
-        -appimage ${APPIMAGE_OUTPUT_ARGUMENT}
-        -no-translations -qmake=${QMAKE_EXECUTABLE}
+        -appimage -no-translations -qmake=${QMAKE_EXECUTABLE}
         WORKING_DIRECTORY ${APP_DEPLOY_PREFIX}
     )
 endfunction()
