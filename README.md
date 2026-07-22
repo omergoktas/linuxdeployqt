@@ -35,7 +35,10 @@ export QMAKE=/path/to/qt/6.5.0/gcc_64/bin/qmake
 # 3. Deploy everything except essential system libraries and build an AppImage.
 ./linuxdeployqt-x86_64.AppImage /path/to/your/executable -qmake=$QMAKE -appimage
 
-# 4. Deploy everything (including essential system libraries)
+# 4. Build an AppImage at an explicitly selected output path.
+./linuxdeployqt-x86_64.AppImage /path/to/your/executable -qmake=$QMAKE -appimage -appimage-output=/path/to/MyApplication.AppImage
+
+# 5. Deploy everything (including essential system libraries)
 ./linuxdeployqt-x86_64.AppImage /path/to/your/executable -qmake=$QMAKE -bundle-everything
 ```
 ## Calling external software from within an app image
@@ -66,6 +69,8 @@ Usage: linuxdeployqt <app-binary|desktop file> [options]
 Options:
    -always-overwrite        : Copy files even if the target file exists.
    -appimage                : Create an AppImage (implies -bundle-non-qt-libs).
+   -appimage-output=<path>  : Write the AppImage to the given path (requires
+                              -appimage).
    -bundle-non-qt-libs      : Also bundle non-core, non-Qt libraries.
    -bundle-everything       : Bundle everything including system libraries.
    -exclude-libs=<list>     : List of libraries which should be excluded,

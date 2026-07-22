@@ -2121,19 +2121,37 @@ bool checkAppImagePrerequisites(const QString& appDirPath)
     return true;
 }
 
-int createAppImage(const QString& appDirPath)
+int createAppImage(const QString& appDirPath, const QString& appImageOutputPath)
 {
-    QString updateInfoArgument;
+    QStringList arguments{"-v", appDirPath, "-n"};
     if (!updateInformation.isEmpty())
-        updateInfoArgument = QString("-u '%1'").arg(updateInformation);
+        arguments << "-u" << updateInformation;
+    if (!appImageOutputPath.isEmpty())
+        arguments << appImageOutputPath;
 
-    QString appImageCommand = "appimagetool -v '" + appDirPath + "' -n "
-                              + updateInfoArgument;
-    LogNormal() << appImageCommand;
-    int ret = system(appImageCommand.toUtf8().constData());
-    LogNormal() << "ret" << ret;
-    LogNormal() << "WEXITSTATUS(ret)" << WEXITSTATUS(ret);
-    return WEXITSTATUS(ret);
+    const QString appImageTool = QStandardPaths::findExecutable("appimagetool");
+    if (appImageTool.isEmpty()) {
+        LogError() << "Could not find appimagetool\n";
+        return EXIT_FAILURE;
+    }
+
+    LogNormal() << appImageTool << arguments;
+    QProcess process;
+    process.setProcessChannelMode(QProcess::ForwardedChannels);
+    process.start(appImageTool, arguments);
+    if (!process.waitForStarted()) {
+        LogError() << "Could not start appimagetool:" << process.errorString()
+                   << "\n";
+        return EXIT_FAILURE;
+    }
+    process.waitForFinished(-1);
+    if (process.exitStatus() != QProcess::NormalExit) {
+        LogError() << "appimagetool crashed\n";
+        return EXIT_FAILURE;
+    }
+
+    LogNormal() << "appimagetool exited with" << process.exitCode();
+    return process.exitCode();
 }
 
 void findUsedModules(DeploymentInfo& info)

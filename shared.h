@@ -119,7 +119,8 @@ void stripAppBinary(const QString& bundlePath);
 QString findAppBinary(const QString& appDirPath);
 QStringList findAppLibraries(const QString& appDirPath);
 bool patchQtCore(const QString& path, const QString& variable, const QString& value);
-int createAppImage(const QString& appBundlePath);
+int createAppImage(const QString& appBundlePath,
+                   const QString& appImageOutputPath = QString());
 bool checkAppImagePrerequisites(const QString& appBundlePath);
 void findUsedModules(DeploymentInfo& info);
 void deployTranslations(const QString& appDirPath, quint64 usedQtModules);

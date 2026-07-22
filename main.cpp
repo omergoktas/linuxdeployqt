@@ -33,6 +33,7 @@ int main(int argc, char* argv[])
 
     bool plugins = true;
     bool appimage = false;
+    QString appImageOutputPath;
     extern bool runStripEnabled;
     extern bool bundleAllButBlacklistedLibs;
     extern bool bundleEverything;
@@ -78,6 +79,14 @@ int main(int argc, char* argv[])
             LogDebug() << "Argument found:" << argument;
             appimage = true;
             bundleAllButBlacklistedLibs = true;
+        } else if (argument.startsWith(QByteArray("-appimage-output="))) {
+            LogDebug() << "Argument found:" << argument;
+            appImageOutputPath = QString::fromLocal8Bit(
+                argument.mid(QByteArray("-appimage-output=").size()));
+            if (appImageOutputPath.isEmpty()) {
+                LogError() << "Missing AppImage output path\n";
+                return EXIT_FAILURE;
+            }
         } else if (argument == QByteArray("-bundle-everything")) {
             LogDebug() << "Argument found:" << argument;
             bundleEverything = true;
@@ -188,6 +197,8 @@ int main(int argc, char* argv[])
                    "exists.";
         qInfo() << "   -appimage                : Create an AppImage (implies "
                    "-bundle-non-qt-libs).";
+        qInfo() << "   -appimage-output=<path>  : Write the AppImage to the given path "
+                   "(requires -appimage).";
         qInfo()
             << "   -bundle-non-qt-libs      : Also bundle non-core, non-Qt libraries.";
         qInfo() << "   -bundle-everything       : Bundle everything including system "
@@ -244,6 +255,11 @@ int main(int argc, char* argv[])
         qInfo() << "See the \"Deploying Applications on Linux\" topic in the";
         qInfo() << "documentation for more information about deployment on Linux.";
 
+        return EXIT_FAILURE;
+    }
+
+    if (!appImageOutputPath.isEmpty() && !appimage) {
+        LogError() << "-appimage-output requires -appimage\n";
         return EXIT_FAILURE;
     }
 
@@ -573,7 +589,7 @@ int main(int argc, char* argv[])
     }
 
     if (appimage) {
-        int result = createAppImage(appDirPath);
+        int result = createAppImage(appDirPath, appImageOutputPath);
         LogDebug() << "result:" << result;
         exit(result);
     }
