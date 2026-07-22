@@ -17,9 +17,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            arch: x86_64
           - os: ubuntu-22.04-arm
-            arch: arm64
 
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -34,13 +32,6 @@ jobs:
         sudo apt-get install -y build-essential ninja-build patchelf libglib2.0-dev
         pip install aqtinstall
         mkdir executables
-
-    - name: Download bootstrap linuxdeployqt
-      run: |
-        curl --fail --location --show-error \
-          https://github.com/omergoktas/linuxdeployqt/releases/download/latest/linuxdeployqt-${{ matrix.arch }}.AppImage \
-          --output linuxdeployqt-bootstrap.AppImage
-        chmod +x linuxdeployqt-bootstrap.AppImage
 
     - name: Install Qt
       if: matrix.os == 'ubuntu-22.04'
@@ -61,8 +52,7 @@ jobs:
           -B build-amd64 \
           -G Ninja \
           -D CMAKE_BUILD_TYPE=Release \
-          -D APP_DEPLOY_EXECUTABLE=$GITHUB_WORKSPACE/linuxdeployqt-bootstrap.AppImage \
-          -D APP_DEPLOY_OUTPUT_PATH=$GITHUB_WORKSPACE/build-amd64/deploy/linuxdeployqt-${{ matrix.arch }}.AppImage
+          -D APP_DEPLOY_OUTPUT_PATH=$GITHUB_WORKSPACE/build-amd64/deploy/linuxdeployqt-x86_64.AppImage
         cmake --build build-amd64 --parallel --config Release
         cp build-amd64/deploy/*.AppImage executables
 
@@ -75,8 +65,7 @@ jobs:
           -B build-arm64 \
           -G Ninja \
           -D CMAKE_BUILD_TYPE=Release \
-          -D APP_DEPLOY_EXECUTABLE=$GITHUB_WORKSPACE/linuxdeployqt-bootstrap.AppImage \
-          -D APP_DEPLOY_OUTPUT_PATH=$GITHUB_WORKSPACE/build-arm64/deploy/linuxdeployqt-${{ matrix.arch }}.AppImage
+          -D APP_DEPLOY_OUTPUT_PATH=$GITHUB_WORKSPACE/build-arm64/deploy/linuxdeployqt-arm64.AppImage
         cmake --build build-arm64 --parallel --config Release
         cp build-arm64/deploy/*.AppImage executables
 

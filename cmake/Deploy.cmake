@@ -10,12 +10,6 @@ function(deploy TARGET)
     endif()
 
     set(DEPLOY_PREFIX_PATH ${APP_DEPLOY_PREFIX}/${TARGET}.AppDir)
-    if(APP_DEPLOY_EXECUTABLE)
-        set(DEPLOY_EXECUTABLE "${APP_DEPLOY_EXECUTABLE}")
-    else()
-        set(DEPLOY_EXECUTABLE "$<TARGET_FILE:${TARGET}>")
-    endif()
-
     set(APPIMAGE_OUTPUT_ARGUMENT)
     if(APP_DEPLOY_OUTPUT_PATH)
         set(APPIMAGE_OUTPUT_ARGUMENT "-appimage-output=${APP_DEPLOY_OUTPUT_PATH}")
@@ -84,7 +78,7 @@ function(deploy TARGET)
         ARCH=${CMAKE_SYSTEM_PROCESSOR}
         APPIMAGE_EXTRACT_AND_RUN=1
         --
-        ${DEPLOY_EXECUTABLE}
+        $<TARGET_FILE:${TARGET}>
         ${DEPLOY_PREFIX_PATH}/usr/bin/$<TARGET_FILE_NAME:${TARGET}>
         -appimage ${APPIMAGE_OUTPUT_ARGUMENT}
         -no-translations -qmake=${QMAKE_EXECUTABLE}
