@@ -10,6 +10,11 @@ function(deploy TARGET)
     endif()
 
     set(DEPLOY_PREFIX_PATH ${APP_DEPLOY_PREFIX}/${TARGET}.AppDir)
+    set(APPIMAGE_OUTPUT_ARCH ${CMAKE_SYSTEM_PROCESSOR})
+    if(APPIMAGE_OUTPUT_ARCH STREQUAL "aarch64")
+        set(APPIMAGE_OUTPUT_ARCH arm64)
+    endif()
+    set(APPIMAGE_OUTPUT_PATH ${APP_DEPLOY_PREFIX}/${TARGET}-${APPIMAGE_OUTPUT_ARCH}.AppImage)
 
     find_program(APPIMAGETOOL_EXECUTABLE appimagetool)
     find_program(PATCHELF_EXECUTABLE patchelf REQUIRED)
@@ -17,8 +22,17 @@ function(deploy TARGET)
     if(NOT APPIMAGETOOL_EXECUTABLE)
         message(STATUS "Could NOT find appimagetool, downloading...")
         set(APPIMAGETOOL_EXECUTABLE ${CMAKE_CURRENT_BINARY_DIR}/appimagetool)
-        set(APPIMAGETOOL_URL "https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-${CMAKE_SYSTEM_PROCESSOR}.AppImage")
-        file(DOWNLOAD ${APPIMAGETOOL_URL} ${APPIMAGETOOL_EXECUTABLE} SHOW_PROGRESS)
+        set(APPIMAGETOOL_URL "https://github.com/AppImage/AppImageKit/releases/download/13/obsolete-appimagetool-${CMAKE_SYSTEM_PROCESSOR}.AppImage")
+        file(
+            DOWNLOAD ${APPIMAGETOOL_URL} ${APPIMAGETOOL_EXECUTABLE}
+            SHOW_PROGRESS
+            STATUS APPIMAGETOOL_DOWNLOAD_STATUS
+        )
+        list(GET APPIMAGETOOL_DOWNLOAD_STATUS 0 APPIMAGETOOL_DOWNLOAD_RESULT)
+        if(NOT APPIMAGETOOL_DOWNLOAD_RESULT EQUAL 0)
+            list(GET APPIMAGETOOL_DOWNLOAD_STATUS 1 APPIMAGETOOL_DOWNLOAD_ERROR)
+            message(FATAL_ERROR "Could NOT download appimagetool: ${APPIMAGETOOL_DOWNLOAD_ERROR}")
+        endif()
         file(CHMOD ${APPIMAGETOOL_EXECUTABLE} PERMISSIONS OWNER_READ OWNER_EXECUTE)
     endif()
 
@@ -61,9 +75,14 @@ function(deploy TARGET)
     )
 
     add_custom_command(TARGET deploy VERBATIM POST_BUILD
-        COMMAND ARCH=${CMAKE_SYSTEM_PROCESSOR} $<TARGET_FILE:${TARGET}>
+        COMMAND ${CMAKE_COMMAND} -E env
+        ARCH=${CMAKE_SYSTEM_PROCESSOR}
+        APPIMAGE_EXTRACT_AND_RUN=1
+        --
+        $<TARGET_FILE:${TARGET}>
         ${DEPLOY_PREFIX_PATH}/usr/bin/$<TARGET_FILE_NAME:${TARGET}>
-        -appimage -no-translations -qmake=${QMAKE_EXECUTABLE}
+        -appimage -appimage-output=${APPIMAGE_OUTPUT_PATH}
+        -no-translations -qmake=${QMAKE_EXECUTABLE}
         WORKING_DIRECTORY ${APP_DEPLOY_PREFIX}
     )
 endfunction()
