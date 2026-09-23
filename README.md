@@ -42,9 +42,23 @@ export QMAKE=/path/to/qt/6.5.0/gcc_64/bin/qmake
 # 5. Deploy everything (including essential system libraries)
 ./linuxdeployqt-x86_64.AppImage /path/to/your/executable -qmake=$QMAKE -bundle-everything
 ```
+## Bundled C++ runtime
+
+A C++ program needs a C++ runtime, `libstdc++.so.6` and `libgcc_s.so.1`, at least as new as the one it was built with. Without it the program stops at startup with an error such as `` version `GLIBCXX_3.4.32' not found ``. Whenever linuxdeployqt bundles non-Qt libraries (`-appimage` or `-bundle-non-qt-libs`), it therefore also bundles the runtime the deployed binaries use on the build machine, so the app runs on systems whose own runtime is older.
+
+The runtime cannot simply go into `usr/lib` with the other libraries. A process can load only one copy of each library, and the system libraries that get loaded into the app, such as GPU drivers (Mesa, NVIDIA), input methods and platform themes, may need the system's own runtime when it is newer than the bundled one. A newer runtime runs everything built for an older one, so the right copy is always the newer of the two, and that can only be decided on the user's machine:
+
+- linuxdeployqt copies the libraries into `usr/optional/libstdc++/` and `usr/optional/libgcc_s/`. No RPATH points there, so nothing loads them by default.
+- It also writes `usr/optional/checkrt`, a small program that needs nothing but the C library. At startup `AppRun` runs it, and it compares each bundled library with the system's copy by the highest version the library defines (`GLIBCXX_*` for libstdc++, `GCC_*` for libgcc_s), as read from its ELF version definitions. It finds the system's copy the way the app would, through the dynamic linker.
+- `AppRun` puts the directories of the bundled libraries that are newer, or that the system lacks, in front of `LD_LIBRARY_PATH`. When the system's copies are at least as new, nothing changes.
+
+Set `APPIMAGE_CHECKRT_DEBUG=1` when starting the AppImage to see each decision. Pass `-no-bundle-cxx-runtime` to leave the runtime out. An `AppRun` the AppDir already has is kept as it is; linuxdeployqt warns when it does not run `usr/optional/checkrt`, because the bundled runtime is then never used. `checkrt` needs the glibc version that the machine linuxdeployqt was built on requires of every program (2.34 for the pre-built release), which never exceeds what the deployed app itself requires.
+
+Programs the app starts inherit `LD_LIBRARY_PATH`, including a bundled runtime directory. This is harmless, since the bundled runtime is only there when it is newer than the system's, and restoring `SYS_LD_LIBRARY_PATH` as shown below removes it along with the rest.
+
 ## Calling external software from within an app image
 
-Authors of an app-imaged software should know that we [modify](https://github.com/omergoktas/linuxdeployqt/blob/dd07ded19e4c4710da37a17eefd11b58e63ac303/deploy/Template.AppDir/AppRun) system environment variables to establish a sandbox before calling the app-imaged software. This way the app-imaged software prefers the libraries shipped with the app image over the libraries installed on the end user's system when loading its dependencies. On the other hand, these changes could cause conflicting libraries when calling external software from within the app image. Therefore it is important that the calling software restore the system environment before executing external software via QProcess, etc. All modified environment variables available through a `SYS_<modified_var>`-prefixed name, i.e. `SYS_PATH` for `PATH`. Check out the example code below:
+Authors of an app-imaged software should know that we [modify](https://github.com/omergoktas/linuxdeployqt/blob/master/assets/AppRun) system environment variables to establish a sandbox before calling the app-imaged software. This way the app-imaged software prefers the libraries shipped with the app image over the libraries installed on the end user's system when loading its dependencies. On the other hand, these changes could cause conflicting libraries when calling external software from within the app image. Therefore it is important that the calling software restore the system environment before executing external software via QProcess, etc. All modified environment variables available through a `SYS_<modified_var>`-prefixed name, i.e. `SYS_PATH` for `PATH`. Check out the example code below:
 
 ```cpp
 auto env = QProcessEnvironment::systemEnvironment();
@@ -84,6 +98,9 @@ Options:
                               the deployed libraries too
    -extra-plugins=<list>    : List of extra plugins which should be deployed,
                               separated by comma.
+   -no-bundle-cxx-runtime   : Don't bundle libstdc++ and libgcc_s, which
+                              -appimage and -bundle-non-qt-libs add for use
+                              when newer than the system's.
    -no-copy-copyright-files : Skip deployment of copyright files.
    -no-plugins              : Skip plugin deployment.
    -no-strip                : Don't run 'strip' on the binaries.

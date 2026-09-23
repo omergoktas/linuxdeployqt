@@ -51,6 +51,7 @@ int main(int argc, char* argv[])
     extern QStringList extraQtPlugins;
     extern QStringList ignoreGlob;
     extern bool copyCopyrightFiles;
+    extern bool bundleCxxRuntime;
     extern QString updateInformation;
     extern QString qtLibInfix;
 
@@ -96,6 +97,9 @@ int main(int argc, char* argv[])
         } else if (argument == QByteArray("-bundle-non-qt-libs")) {
             LogDebug() << "Argument found:" << argument;
             bundleAllButBlacklistedLibs = true;
+        } else if (argument == QByteArray("-no-bundle-cxx-runtime")) {
+            LogDebug() << "Argument found:" << argument;
+            bundleCxxRuntime = false;
         } else if (argument.startsWith(QByteArray("-verbose"))) {
             LogDebug() << "Argument found:" << argument;
             int index = argument.indexOf("=");
@@ -218,6 +222,12 @@ int main(int argc, char* argv[])
         qInfo() << "   -extra-plugins=<list>    : List of extra plugins which should "
                    "be deployed,";
         qInfo() << "                              separated by comma.";
+        qInfo() << "   -no-bundle-cxx-runtime   : Don't bundle libstdc++ and libgcc_s, "
+                   "which";
+        qInfo()
+            << "                              -appimage and -bundle-non-qt-libs add "
+               "for use";
+        qInfo() << "                              when newer than the system's.";
         qInfo() << "   -no-copy-copyright-files : Skip deployment of copyright files.";
         qInfo() << "   -no-plugins              : Skip plugin deployment.";
         qInfo() << "   -no-strip                : Don't run 'strip' on the binaries.";
@@ -586,6 +596,13 @@ int main(int argc, char* argv[])
 
     if (!skipTranslations) {
         deployTranslations(appDirPath, deploymentInfo.usedModulesMask);
+    }
+
+    // The C++ runtime is bundled whenever non-Qt libraries are. With
+    // -bundle-everything it already sits in the library directory.
+    if (bundleCxxRuntime && bundleAllButBlacklistedLibs && !bundleEverything) {
+        deployCxxRuntime(appDirPath,
+                         QStringList() << appBinaryPath << additionalExecutables);
     }
 
     if (appimage) {

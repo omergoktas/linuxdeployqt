@@ -88,6 +88,7 @@ bool deployLibrary = false;
 QStringList extraQtPlugins;
 QStringList ignoreGlob;
 bool copyCopyrightFiles = true;
+bool bundleCxxRuntime = true;
 QString updateInformation;
 QString qtLibInfix;
 
@@ -766,6 +767,12 @@ QStringList findAppLibraries(const QString& appDirPath)
         ignoreGlobAbs += globAbs;
     }
 
+    // The C++ runtime in usr/optional stays off every RPATH on purpose; see
+    // deployCxxRuntime(). A second run over the same AppDir must not treat it as
+    // one of the app's libraries.
+    const QString optionalPath = QDir(appDirPath).absoluteFilePath("usr/optional")
+                                 + "/";
+
     QStringList result;
     // .so, .so.*
     QDirIterator iter(appDirPath,
@@ -776,7 +783,8 @@ QStringList findAppLibraries(const QString& appDirPath)
 
     while (iter.hasNext()) {
         iter.next();
-        if (QDir::match(ignoreGlobAbs, iter.fileInfo().absoluteFilePath())) {
+        if (QDir::match(ignoreGlobAbs, iter.fileInfo().absoluteFilePath())
+            || iter.fileInfo().absoluteFilePath().startsWith(optionalPath)) {
             continue;
         }
         result << iter.fileInfo().filePath();
@@ -2141,6 +2149,107 @@ bool checkAppImagePrerequisites(const QString& appDirPath)
         file2.close();
     }
     return true;
+}
+
+/*
+    Bundles the C++ runtime, libstdc++.so.6 and libgcc_s.so.1, so that the app
+    also runs on systems whose own runtime is older than this machine's.
+
+    Each library is copied from where the deployed binaries find it on this
+    machine into usr/optional/libstdc++/ or usr/optional/libgcc_s/. No RPATH
+    points there, so nothing loads the copies by default. At startup AppRun runs
+    usr/optional/checkrt, which names the copies that are newer than the
+    system's own, and puts their directories in front of LD_LIBRARY_PATH. A
+    process can load only one copy of each library, and a newer copy runs
+    everything built for an older one, so the newer of the two is always the
+    right one. An older bundled copy would break the system libraries that get
+    loaded into the app, such as GPU drivers, when they need the system's newer
+    runtime.
+*/
+void deployCxxRuntime(const QString& appDirPath, const QStringList& binaryPaths)
+{
+    struct Runtime
+    {
+        QString fileName;
+        QString directory;
+    };
+    const QList<Runtime> runtimes{{"libstdc++.so.6", "libstdc++"},
+                                  {"libgcc_s.so.1", "libgcc_s"}};
+
+    // ldd reports the copy each binary resolves to on this machine, as it did
+    // for every other library during the deployment.
+    QMap<QString, QString> lddPaths;
+    for (const QString& binaryPath : binaryPaths) {
+        for (const DylibInfo& dependency : findDependencyInfo(binaryPath).dependencies) {
+            const QString fileName = QFileInfo(dependency.binaryPath).fileName();
+            if (!lddPaths.contains(fileName))
+                lddPaths.insert(fileName, dependency.binaryPath);
+        }
+        if (lddPaths.contains(runtimes[0].fileName)
+            && lddPaths.contains(runtimes[1].fileName))
+            break;
+    }
+
+    const QString appDirCanonicalPath = QDir(appDirPath).canonicalPath() + "/";
+    const QString optionalPath = appDirPath + "/usr/optional";
+    bool bundled = false;
+    for (const Runtime& runtime : runtimes) {
+        const QString lddPath = lddPaths.value(runtime.fileName);
+        const QString sourcePath = QFileInfo(lddPath).canonicalFilePath();
+        if (sourcePath.isEmpty()) {
+            LogNormal() << "Not bundling" << runtime.fileName
+                        << "because no deployed binary uses it";
+            continue;
+        }
+        if (sourcePath.startsWith(appDirCanonicalPath)) {
+            LogWarning() << runtime.fileName << "is already inside the AppDir at"
+                         << sourcePath << "so it is not bundled in usr/optional";
+            continue;
+        }
+
+        // Always replace the copy, which may be left from a run on an older
+        // runtime.
+        const QString destinationDirectory = optionalPath + "/" + runtime.directory;
+        const QString destinationPath = destinationDirectory + "/" + runtime.fileName;
+        QDir().mkpath(destinationDirectory);
+        QFile::remove(destinationPath);
+        if (!QFile::copy(sourcePath, destinationPath)
+            || !QFile::setPermissions(destinationPath,
+                                      QFile::ReadOwner | QFile::WriteOwner
+                                          | QFile::ReadGroup | QFile::ReadOther)) {
+            LogError() << "Could not copy" << sourcePath << "to" << destinationPath;
+            continue;
+        }
+        LogNormal() << "Bundled the C++ runtime" << sourcePath << "as"
+                    << destinationPath;
+        copyCopyrightFile(lddPath);
+        bundled = true;
+    }
+    if (!bundled)
+        return;
+
+    const QString checkrtPath = optionalPath + "/checkrt";
+    QFile::remove(checkrtPath);
+    if (!QFile::copy(":/assets/checkrt", checkrtPath)
+        || !QFile::setPermissions(checkrtPath,
+                                  QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner
+                                      | QFile::ReadGroup | QFile::ExeGroup
+                                      | QFile::ReadOther | QFile::ExeOther)) {
+        LogError() << "Could not write" << checkrtPath
+                   << "so the bundled C++ runtime will never be used";
+        return;
+    }
+
+    // linuxdeployqt's own AppRun runs checkrt, but an AppRun the AppDir already
+    // had is kept as it is and may not.
+    QFile appRun(appDirPath + "/AppRun");
+    if (!appRun.open(QIODevice::ReadOnly)
+        || !appRun.readAll().contains("usr/optional/checkrt")) {
+        LogWarning() << "AppRun does not run usr/optional/checkrt, so the bundled "
+                        "C++ runtime will never be used.";
+        LogWarning() << "Delete AppRun to let linuxdeployqt write its own, or run "
+                        "checkrt from it as linuxdeployqt's AppRun does.";
+    }
 }
 
 int createAppImage(const QString& appDirPath, const QString& appImageOutputPath)
