@@ -297,7 +297,7 @@ int main(int argc, char* argv[])
             qDebug() << "desktopIconEntry:" << desktopIconEntry;
 
             QString candidateBin = QDir::cleanPath(
-                QFileInfo(firstArgument).absolutePath()
+                QFileInfo(firstArgument).absolutePath() + "/"
                 + desktopExecEntry); // Not FHS-like
 
             /* Search directory for an executable with the name in the Exec= key */
@@ -371,7 +371,7 @@ int main(int argc, char* argv[])
 
     QString appDir = QDir::cleanPath(appBinaryPath + "/../");
     if (QDir().exists(appDir) == false) {
-        qDebug() << "Error: Could not find AppDir" << appDir;
+        LogError() << "Could not find AppDir" << appDir;
         return EXIT_FAILURE;
     }
 

@@ -338,17 +338,25 @@ static QtModuleEntry qt6ModuleEntries[]
        {Qt6WebViewModule, "webview", "Qt6WebView", nullptr},
        {Qt6ShaderToolsModule, "shadertools", "Qt6ShaderTools", nullptr}};
 
+// The environment linuxdeployqt was started in, for the tools it runs. When it
+// runs from its own AppImage, AppRun has saved each variable it changed as
+// SYS_<name>, and the saved value is put back. When it runs directly, there is
+// no saved value and the variable is passed on unchanged instead of emptied.
 QProcessEnvironment systemEnvironment()
 {
     static QProcessEnvironment env = [] {
         auto env = QProcessEnvironment::systemEnvironment();
-        env.insert("PATH", env.value("SYS_PATH"));
-        env.insert("LD_LIBRARY_PATH", env.value("SYS_LD_LIBRARY_PATH"));
-        env.insert("PYTHONPATH", env.value("SYS_PYTHONPATH"));
-        env.insert("XDG_DATA_DIRS", env.value("SYS_XDG_DATA_DIRS"));
-        env.insert("PERLLIB", env.value("SYS_PERLLIB"));
-        env.insert("GSETTINGS_SCHEMA_DIR", env.value("SYS_GSETTINGS_SCHEMA_DIR"));
-        env.insert("QT_PLUGIN_PATH", env.value("SYS_QT_PLUGIN_PATH"));
+        for (const char* name : {"PATH",
+                                 "LD_LIBRARY_PATH",
+                                 "PYTHONPATH",
+                                 "XDG_DATA_DIRS",
+                                 "PERLLIB",
+                                 "GSETTINGS_SCHEMA_DIR",
+                                 "QT_PLUGIN_PATH"}) {
+            const QString savedName = QStringLiteral("SYS_") + QLatin1String(name);
+            if (env.contains(savedName))
+                env.insert(QLatin1String(name), env.value(savedName));
+        }
         return env;
     }();
     return env;
@@ -1778,13 +1786,17 @@ void deployPlugins(const AppDirInfo& appDirInfo,
                                   QStringList() << destinationPath,
                                   deploymentInfo.useLoaderPath);
                 /* See whether this makes any difference */
-                // Find out the relative path to the lib/ directory and set it as the rpath
-                QDir dir(destinationPath);
-                QString relativePath = dir.relativeFilePath(
-                    appDirInfo.path + "/" + libraries[0].libraryDestinationDirectory);
-                relativePath.remove(0, 3); // remove initial '../'
-                changeIdentification("$ORIGIN/" + relativePath,
-                                     QFileInfo(destinationPath).canonicalFilePath());
+                // Find out the relative path to the lib/ directory and set it as the rpath.
+                // A plugin without libraries to deploy has no such directory to point to.
+                if (!libraries.isEmpty()) {
+                    QDir dir(destinationPath);
+                    QString relativePath = dir.relativeFilePath(
+                        appDirInfo.path + "/"
+                        + libraries[0].libraryDestinationDirectory);
+                    relativePath.remove(0, 3); // remove initial '../'
+                    changeIdentification("$ORIGIN/" + relativePath,
+                                         QFileInfo(destinationPath).canonicalFilePath());
+                }
             }
             LogDebug() << "copyCopyrightFile:" << sourcePath;
             copyCopyrightFile(sourcePath);
@@ -2101,8 +2113,8 @@ bool checkAppImagePrerequisites(const QString& appDirPath)
                       QDir::Files,
                       QDirIterator::Subdirectories);
     if (!iter.hasNext()) {
-        LogError() << "Desktop file missing, creating a default one (you will probably "
-                      "want to edit it)";
+        LogWarning() << "Desktop file missing, creating a default one (you will "
+                        "probably want to edit it)";
         QFile file(appDirPath + "/default.desktop");
         file.open(QIODevice::WriteOnly | QIODevice::Text);
         QTextStream out(&file);
@@ -2122,13 +2134,10 @@ bool checkAppImagePrerequisites(const QString& appDirPath)
                        QDir::Files,
                        QDirIterator::Subdirectories);
     if (!iter2.hasNext()) {
-        LogError() << "Icon file missing, creating a default one (you will probably "
-                      "want to edit it)";
+        LogWarning() << "Icon file missing, creating an empty one (you will probably "
+                        "want to replace it)";
         QFile file2(appDirPath + "/default.png");
-        file2.open(QIODevice::WriteOnly | QIODevice::Text);
-        QTextStream out2(&file2);
-        out2 << "";
-        QTextStream out(&file2);
+        file2.open(QIODevice::WriteOnly);
         file2.close();
     }
     return true;
