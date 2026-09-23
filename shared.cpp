@@ -471,21 +471,35 @@ bool copyCopyrightFile(QString libPath)
 
     QString copyrightFilePath;
 
-    /* Find out which package the file being deployed belongs to */
+    /* Find out which package the file being deployed belongs to. dpkg knows a
+     * file only by the path its package installed it at, and on a merged /usr,
+     * ldd may report /lib/... for a file installed as /usr/lib/..., so the
+     * resolved path is tried as well. */
 
-    QStringList arguments;
-    arguments << "-S" << libPath;
     QProcess myProcess;
     myProcess.setProcessEnvironment(systemEnvironment());
-    myProcess.start(dpkgPath, arguments);
-    myProcess.waitForFinished();
-    QString strOut = myProcess.readAllStandardOutput().split(':')[0];
+    QString strOut;
+    for (const QString& path : {libPath, QFileInfo(libPath).canonicalFilePath()}) {
+        if (path.isEmpty())
+            continue;
+        myProcess.start(dpkgPath, QStringList() << "-S" << path);
+        myProcess.waitForFinished();
+        // The answer reads "libfoo1:amd64: /path"; keep the package with its
+        // architecture, the first one when several share the file.
+        strOut = QString(myProcess.readAllStandardOutput())
+                     .section('\n', 0, 0)
+                     .section(QStringLiteral(": "), 0, 0)
+                     .section(QStringLiteral(", "), 0, 0)
+                     .trimmed();
+        if (strOut != "")
+            break;
+    }
     if (strOut == "")
         return false;
 
-    /* Find out the copyright file in that package */
-    arguments << "-L" << strOut;
-    myProcess.start(dpkgQueryPath, arguments);
+    /* Find out the copyright file in that package; dpkg-query -L lists one
+     * installed path per line */
+    myProcess.start(dpkgQueryPath, QStringList() << "-L" << strOut);
     myProcess.waitForFinished();
     strOut = myProcess.readAllStandardOutput();
 
@@ -493,11 +507,10 @@ bool copyCopyrightFile(QString libPath)
         = strOut.split("\n", QSTRING_SPLIT_BEHAVIOR_NAMESPACE::SkipEmptyParts);
 
     foreach (QString outputLine, outputLines) {
-        if ((outputLine.contains("usr/share/doc"))
-            && (outputLine.contains("/copyright")) && (outputLine.contains(" "))) {
-            // copyrightFilePath = outputLine.split(' ')[1]; // This is not working on multiarch systems; see https://github.com/probonopd/linuxdeployqt/issues/184#issuecomment-345293540
-            QStringList parts = outputLine.split(' ');
-            copyrightFilePath = parts[parts.size() - 1]; // Grab last element
+        outputLine = outputLine.trimmed();
+        if (outputLine.startsWith("/usr/share/doc/")
+            && outputLine.endsWith("/copyright")) {
+            copyrightFilePath = outputLine;
             break;
         }
     }
