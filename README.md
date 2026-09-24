@@ -5,7 +5,7 @@ This tool simplifies the deployment of dependencies for Linux applications and e
 > Provides bug fixes and improvements on top of [qt/macdeployqt](https://github.com/qt/qtbase/tree/dev/src/tools/macdeployqt) and [probonopd/linuxdeployqt](https://github.com/probonopd/linuxdeployqt).
 
 ## Download
-You can download the latest pre-built binary for [**x86_64**](https://github.com/omergoktas/linuxdeployqt/releases/download/latest/linuxdeployqt-x86_64.AppImage) or [**arm64**](https://github.com/omergoktas/linuxdeployqt/releases/download/latest/linuxdeployqt-arm64.AppImage), or you can build your own from the source code using the instructions below:
+You can download the latest pre-built binary for [**x86_64**](https://github.com/omergoktas/linuxdeployqt/releases/latest/download/linuxdeployqt-x86_64.AppImage) or [**arm64**](https://github.com/omergoktas/linuxdeployqt/releases/latest/download/linuxdeployqt-arm64.AppImage), or you can build your own from the source code using the instructions below:
 
 ```bash
 # CMAKE_PREFIX_PATH should point to your Qt installation (Qt 6.7.3 or newer);
