@@ -546,7 +546,7 @@ int main(int argc, char* argv[])
     // recurse folders for additional executables
     for (const auto& folder : additionalExecutablesDir) {
         QString directoryToBeSearched = QDir::cleanPath(
-            QFileInfo(folder).absolutePath());
+            QFileInfo(folder).absoluteFilePath());
         QDirIterator it(directoryToBeSearched, QDirIterator::Subdirectories);
         while (it.hasNext()) {
             it.next();
