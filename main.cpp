@@ -183,8 +183,8 @@ int main(int argc, char* argv[])
 
     // Warn about use of new glibc
     const char* glcv = gnu_get_libc_version();
-    if (strverscmp(glcv, "2.32") >= 0) {
-        qInfo() << "WARNING: The host system is too new (glibc > 2.31). To ensure "
+    if (strverscmp(glcv, "2.36") >= 0) {
+        qInfo() << "WARNING: The host system is too new (glibc > 2.35). To ensure "
                    "compatibility with older systems,";
         qInfo() << "         please consider running this tool on an older mainstream "
                    "Linux distribution. This will";
