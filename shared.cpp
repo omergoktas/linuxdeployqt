@@ -492,7 +492,7 @@ bool copyCopyrightFile(QString libPath)
         if (path.isEmpty())
             continue;
         myProcess.start(dpkgPath, QStringList() << "-S" << path);
-        myProcess.waitForFinished();
+        myProcess.waitForFinished(-1);
         // The answer reads "libfoo1:amd64: /path"; keep the package with its
         // architecture, the first one when several share the file.
         strOut = QString(myProcess.readAllStandardOutput())
@@ -509,7 +509,7 @@ bool copyCopyrightFile(QString libPath)
     /* Find out the copyright file in that package; dpkg-query -L lists one
      * installed path per line */
     myProcess.start(dpkgQueryPath, QStringList() << "-L" << strOut);
-    myProcess.waitForFinished();
+    myProcess.waitForFinished(-1);
     strOut = myProcess.readAllStandardOutput();
 
     QStringList outputLines
@@ -557,7 +557,7 @@ LddInfo findDependencyInfo(const QString& binaryPath)
     QProcess ldd;
     ldd.setProcessEnvironment(lddEnvironment);
     ldd.start("ldd", QStringList() << binaryPath);
-    ldd.waitForFinished();
+    ldd.waitForFinished(-1);
 
     if (ldd.exitStatus() != QProcess::NormalExit || ldd.exitCode() != 0) {
         LogError() << "findDependencyInfo:" << ldd.readAllStandardError();
@@ -830,7 +830,7 @@ QSet<QString> getBinaryRPaths(const QString& path,
         exit(1);
     }
 
-    objdump.waitForFinished();
+    objdump.waitForFinished(-1);
 
     if (objdump.exitCode() != 0) {
         LogError() << "getBinaryRPaths:" << objdump.readAllStandardError();
@@ -1020,7 +1020,7 @@ QString runPatchelf(QStringList options)
                    << patchelftool.errorString();
         exit(1);
     }
-    patchelftool.waitForFinished();
+    patchelftool.waitForFinished(-1);
     if (patchelftool.exitCode() != 0) {
         LogError() << "runPatchelf:" << patchelftool.readAllStandardError();
     }
@@ -1140,7 +1140,7 @@ void runStrip(const QString& binaryPath)
                    << patchelfread.errorString();
         // exit(1); // Do not exit because this could be a script that patchelf can't work on
     }
-    patchelfread.waitForFinished();
+    patchelfread.waitForFinished(-1);
 
     if (patchelfread.exitCode() != 0) {
         LogError() << "Error reading rpath with patchelf"
@@ -1177,7 +1177,7 @@ void runStrip(const QString& binaryPath)
         }
         exit(1);
     }
-    strip.waitForFinished();
+    strip.waitForFinished(-1);
 
     if (strip.exitCode() == 0)
         return;
@@ -1292,7 +1292,7 @@ static QString runQmake(const QString& command)
 #else
     process.startCommand(command, QIODevice::ReadOnly);
 #endif
-    process.waitForFinished();
+    process.waitForFinished(-1);
 
     if (process.exitStatus() != QProcess::NormalExit) {
         LogError() << command << "crashed:" << process.readAllStandardError();
@@ -1988,7 +1988,7 @@ bool deployQmlImports(const QString& appDirPath,
                    << qmlImportScanner.errorString();
         return false;
     }
-    qmlImportScanner.waitForFinished();
+    qmlImportScanner.waitForFinished(-1);
 
     // log qmlimportscanner errors
     qmlImportScanner.setReadChannel(QProcess::StandardError);
@@ -2426,7 +2426,7 @@ bool deployTranslations(const QString& sourcePath,
         QProcess lconvert;
         lconvert.setProcessEnvironment(systemEnvironment());
         lconvert.start(lconvertPath, arguments);
-        lconvert.waitForFinished();
+        lconvert.waitForFinished(-1);
 
         if (lconvert.exitStatus() != QProcess::NormalExit) {
             LogError() << "Fail in lconvert on file" << currentTargetFile;
