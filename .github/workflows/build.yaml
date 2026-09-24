@@ -6,6 +6,7 @@ env:
 on:
   push:
     branches: [ "master" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "master" ]
   workflow_dispatch:
@@ -67,6 +68,15 @@ jobs:
         cmake --build build-arm64 --parallel --config Release
         cp build-arm64/deploy/*.AppImage executables
 
+    - name: Check version
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        # The binary reports the project version from CMakeLists.txt, which must match the tag
+        if ! build-*/linuxdeployqt -version 2>&1 | grep -Fx "linuxdeployqt $GITHUB_REF_NAME"; then
+          echo "::error::linuxdeployqt does not report $GITHUB_REF_NAME, update the version in CMakeLists.txt"
+          exit 1
+        fi
+
     - name: Cache executables for publication
       uses: actions/cache/save@v4
       with:
@@ -77,6 +87,7 @@ jobs:
   publish:
     name: Publish
     needs: build
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-22.04
     permissions: write-all
 
@@ -104,3 +115,42 @@ jobs:
         prerelease: false
         files: |
           executables/*.AppImage
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    concurrency: release-${{ github.ref }}
+    permissions:
+      contents: write
+
+    steps:
+    - name: Restore Linux amd64 executables
+      uses: actions/cache/restore@v4
+      with:
+        fail-on-cache-miss: true
+        key: ubuntu-22.04-${{ github.run_id }}-${{ github.run_attempt }}
+        path: executables
+
+    - name: Restore Linux arm64 executables
+      uses: actions/cache/restore@v4
+      with:
+        fail-on-cache-miss: true
+        key: ubuntu-22.04-arm-${{ github.run_id }}-${{ github.run_attempt }}
+        path: executables
+
+    - name: Publish versioned release
+      working-directory: executables
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        # A versioned release is never modified: fail if one exists for this tag
+        if gh release view "$GITHUB_REF_NAME" > /dev/null; then
+          echo "::error::Release $GITHUB_REF_NAME already exists"
+          exit 1
+        fi
+        sha256sum linuxdeployqt-x86_64.AppImage linuxdeployqt-arm64.AppImage > SHA256SUMS
+        gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "" \
+          linuxdeployqt-x86_64.AppImage linuxdeployqt-arm64.AppImage SHA256SUMS
