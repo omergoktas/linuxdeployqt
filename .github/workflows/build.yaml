@@ -90,6 +90,13 @@ jobs:
       contents: write
 
     steps:
+    # The full history and the tags are needed to find the previous version
+    - name: Download source codes
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
     - name: Restore Linux amd64 executables
       uses: actions/cache/restore@v4
       with:
@@ -104,6 +111,41 @@ jobs:
         key: ubuntu-22.04-arm-${{ github.run_id }}-${{ github.run_attempt }}
         path: executables
 
+    # Every commit since the previous version, credited to its author's GitHub
+    # account, so that GitHub shows each author's avatar under the release
+    - name: Write release notes
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        NOTES="$RUNNER_TEMP/notes.md"
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+        if [ -z "$PREVIOUS_TAG" ]; then
+          echo "First versioned release." > "$NOTES"
+          exit 0
+        fi
+        COMPARE="$RUNNER_TEMP/compare.json"
+        gh api "repos/$GITHUB_REPOSITORY/compare/$PREVIOUS_TAG...$GITHUB_REF_NAME" > "$COMPARE"
+        KNOWN_EMAILS=$(git log --format=%ae "$PREVIOUS_TAG" | sort -u)
+        NEW_CONTRIBUTORS=$(jq -r '.commits[] | select((.parents | length) == 1 and .author.login != null)
+            | [.author.login, .commit.author.email, .sha[0:7], .html_url] | @tsv' "$COMPARE" \
+          | while IFS=$'\t' read -r LOGIN EMAIL SHA URL; do
+              grep -Fxq "$EMAIL" <<< "$KNOWN_EMAILS" || echo "* @$LOGIN made their first contribution in [\`$SHA\`]($URL)"
+            done | awk '!seen[$2]++')
+        {
+          echo "## What's Changed"
+          echo
+          jq -r '.commits[] | select((.parents | length) == 1)
+            | "* \(.commit.message | split("\n")[0]) by \(if .author.login then "@" + .author.login else .commit.author.name end) in [`\(.sha[0:7])`](\(.html_url))"' "$COMPARE"
+          if [ -n "$NEW_CONTRIBUTORS" ]; then
+            echo
+            echo "## New Contributors"
+            echo
+            echo "$NEW_CONTRIBUTORS"
+          fi
+          echo
+          echo "**Full Changelog**: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$PREVIOUS_TAG...$GITHUB_REF_NAME"
+        } > "$NOTES"
+
     - name: Publish versioned release
       working-directory: executables
       env:
@@ -116,5 +158,5 @@ jobs:
           exit 1
         fi
         sha256sum linuxdeployqt-x86_64.AppImage linuxdeployqt-arm64.AppImage > SHA256SUMS
-        gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "" \
+        gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" \
           linuxdeployqt-x86_64.AppImage linuxdeployqt-arm64.AppImage SHA256SUMS
