@@ -1536,6 +1536,14 @@ DeploymentInfo deployQtLibraries(const QString& appDirPath,
                                     !additionalExecutables.isEmpty());
     }
 
+    // The binaries given with -executable and -executable-dir are the caller's
+    // own, like the application's binary, and are stripped like the plugins
+    // linuxdeployqt deploys itself. That happens before their run path changes:
+    // runStrip() leaves a binary alone once its run path starts with $ORIGIN,
+    // because strip can break a binary that patchelf has rewritten.
+    foreach (const QString& executable, additionalExecutables)
+        runStrip(executable);
+
     foreach (const QString& executable,
              QStringList() << applicationBundle.binaryPath << additionalExecutables) {
         changeIdentification("$ORIGIN/"
