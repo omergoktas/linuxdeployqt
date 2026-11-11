@@ -4,6 +4,12 @@ This tool simplifies the deployment of dependencies for Linux applications and e
 
 > Provides bug fixes and improvements on top of [qt/macdeployqt](https://github.com/qt/qtbase/tree/dev/src/tools/macdeployqt) and [probonopd/linuxdeployqt](https://github.com/probonopd/linuxdeployqt).
 
+## Wayland only
+
+An app deployed with linuxdeployqt runs on a Wayland session, and not on an X11 one. Of Qt's platform plugins it gets the Wayland one, with the xdg-shell integration, the EGL integration and the window decorations; nothing of xcb is deployed. The Wayland client libraries, `libwayland-client`, `libwayland-cursor` and `libwayland-egl`, stay the system's, like the OpenGL and EGL libraries, because the system's graphics driver loads the same ones.
+
+Qt's own builds of Qt Gui link `libX11`. It stays the system's too: the system's OpenGL library, which every app needs, loads it as well, so it is there wherever the app can start.
+
 ## Download
 You can download the latest pre-built binary for [**x86_64**](https://github.com/omergoktas/linuxdeployqt/releases/latest/download/linuxdeployqt-x86_64.AppImage) or [**arm64**](https://github.com/omergoktas/linuxdeployqt/releases/latest/download/linuxdeployqt-arm64.AppImage), or you can build your own from the source code using the instructions below:
 

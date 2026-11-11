@@ -1502,7 +1502,35 @@ void deployPlugins(const AppDirInfo& appDirInfo,
     if (containsHowOften(deploymentInfo.deployedLibraries, "libQt5Gui")
         || containsHowOften(deploymentInfo.deployedLibraries, "libQt6Gui")) {
         LogDebug() << "libQt5Gui/libQt6Gui detected";
-        pluginList.append("platforms/libqxcb.so");
+
+        // The Wayland platform plugin, and of its own plugins what a desktop
+        // app needs: the xdg-shell integration, which every desktop's
+        // compositor speaks, the EGL integration, which OpenGL draws through,
+        // and the window decorations, for a compositor that draws none, such as
+        // GNOME's. Qt's other Wayland plugins serve embedded shells and Qt's
+        // own compositor. Nothing of xcb is deployed, so the app runs on a
+        // Wayland session and not on an X11 one. Qt 6.10 and later have one
+        // platform plugin, libqwayland.so, and earlier ones the two below.
+        const int pluginCountBefore = pluginList.size();
+        const QStringList waylandPlugins
+            = {"platforms/libqwayland.so",
+               "platforms/libqwayland-generic.so",
+               "platforms/libqwayland-egl.so",
+               "wayland-shell-integration/libxdg-shell.so",
+               "wayland-graphics-integration-client/libqt-plugin-wayland-egl.so"};
+        foreach (const QString& plugin, waylandPlugins) {
+            if (QFile::exists(pluginSourcePath + "/" + plugin))
+                pluginList.append(plugin);
+        }
+        if (pluginList.size() == pluginCountBefore
+            || !pluginList.at(pluginCountBefore).startsWith("platforms/")) {
+            LogError() << "This Qt has no Wayland platform plugin in"
+                       << pluginSourcePath + "/platforms"
+                       << "and an app without one cannot open a window. Aborting.";
+            exit(1);
+        }
+        appendPluginToList(pluginSourcePath, "wayland-decoration-client", pluginList);
+
         // Platform plugin contexts - apparently needed to enter special characters
         QStringList platformPluginContexts
             = QDir(pluginSourcePath + QStringLiteral("/platforminputcontexts"))
@@ -1566,17 +1594,6 @@ void deployPlugins(const AppDirInfo& appDirInfo,
             appendPluginToList(pluginSourcePath, "accessible", pluginList);
             appendPluginToList(pluginSourcePath, "virtualkeyboard", pluginList);
         }
-    }
-
-    // Platform OpenGL context
-    if ((containsHowOften(deploymentInfo.deployedLibraries, "libQt5OpenGL"))
-        or (containsHowOften(deploymentInfo.deployedLibraries, "libQt6OpenGL"))
-        or (containsHowOften(deploymentInfo.deployedLibraries, "libQt5Gui"))
-        or (containsHowOften(deploymentInfo.deployedLibraries, "libQt6Gui"))
-        or (containsHowOften(deploymentInfo.deployedLibraries, "libQt5XcbQpa"))
-        or (containsHowOften(deploymentInfo.deployedLibraries, "libQt6XcbQpa"))
-        or (containsHowOften(deploymentInfo.deployedLibraries, "libxcb-glx"))) {
-        appendPluginToList(pluginSourcePath, "xcbglintegrations", pluginList);
     }
 
     // Also deploy plugins/iconengines/libqsvgicon.so whenever libQt5Svg.so.* is about to be deployed,
