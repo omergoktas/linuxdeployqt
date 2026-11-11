@@ -583,11 +583,16 @@ int main(int argc, char* argv[])
     deploymentInfo.usedModulesMask = 0;
     findUsedModules(deploymentInfo);
 
-    if (plugins && !deploymentInfo.qtPath.isEmpty()) {
-        if (deploymentInfo.pluginPath.isEmpty())
-            deploymentInfo.pluginPath = QDir::cleanPath(deploymentInfo.qtPath
-                                                        + "/../plugins");
-        deployPlugins(appDirPath, deploymentInfo);
+    if (!deploymentInfo.qtPath.isEmpty()) {
+        if (plugins) {
+            if (deploymentInfo.pluginPath.isEmpty())
+                deploymentInfo.pluginPath = QDir::cleanPath(deploymentInfo.qtPath
+                                                            + "/../plugins");
+            deployPlugins(appDirPath, deploymentInfo);
+        }
+        // qt.conf tells Qt where the AppDir keeps its plugins and QML modules.
+        // With -no-plugins the caller has put them there itself, and Qt needs
+        // the file just as much.
         createQtConf(appDirPath);
     }
 
