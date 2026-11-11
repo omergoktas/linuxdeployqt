@@ -19,18 +19,23 @@ function(deploy TARGET)
     find_program(PATCHELF_EXECUTABLE patchelf REQUIRED)
 
     # linuxdeployqt carries appimagetool and the AppImage runtime, both pinned
-    # here by version and SHA-256, and packs itself with them. The runtime is
+    # here by release and SHA-256, and packs itself with them. The runtime is
     # the static one of the AppImage project, which needs no FUSE library on the
-    # machine an AppImage runs on. To move to newer ones, change the versions
-    # and the four checksums together.
-    set(APPIMAGETOOL_VERSION 1.9.1)
-    set(APPIMAGE_RUNTIME_VERSION 20251108)
+    # machine an AppImage runs on. Both files come from this account's forks of
+    # the AppImage project's repositories, github.com/omergoktas/appimagetool
+    # and github.com/omergoktas/type2-runtime, which build the project's source
+    # at its tags 1.9.1 and 20251108 with the project's own build scripts, so
+    # each file is built from a commit that can be read, with its build log
+    # kept. To move to newer ones, release them in the forks first, then change
+    # the releases and the four checksums here together.
+    set(APPIMAGETOOL_RELEASE 1.9.1-1)
+    set(APPIMAGE_RUNTIME_RELEASE 20251108-1)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-        set(APPIMAGETOOL_SHA256 ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0)
-        set(APPIMAGE_RUNTIME_SHA256 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d)
+        set(APPIMAGETOOL_SHA256 2eb9321e9c1790f5297f16ddc3187c6a17c4772abcfaf0efc49bec85456730bd)
+        set(APPIMAGE_RUNTIME_SHA256 7afaed97f0ea1c30c68e6beb3a0528db4398fe4e6b4f1a23f2077957277fecdf)
     elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-        set(APPIMAGETOOL_SHA256 f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158)
-        set(APPIMAGE_RUNTIME_SHA256 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444)
+        set(APPIMAGETOOL_SHA256 d698e03521232c46a88c1f9f19ac18019142409dcc9dcc073fd47a4ec0a17e4f)
+        set(APPIMAGE_RUNTIME_SHA256 10d582ecc70c2836afee511cfc79ea6e8733ca686cb2258d86b3c4fec1b84b0b)
     else()
         message(FATAL_ERROR "No appimagetool is pinned for ${CMAKE_SYSTEM_PROCESSOR}.")
     endif()
@@ -40,7 +45,7 @@ function(deploy TARGET)
     set(APPIMAGE_RUNTIME_FILE ${CMAKE_CURRENT_BINARY_DIR}/appimage-runtime)
     file(
         DOWNLOAD
-        "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-${CMAKE_SYSTEM_PROCESSOR}.AppImage"
+        "https://github.com/omergoktas/appimagetool/releases/download/${APPIMAGETOOL_RELEASE}/appimagetool-${CMAKE_SYSTEM_PROCESSOR}.AppImage"
         ${APPIMAGETOOL_EXECUTABLE}
         EXPECTED_HASH SHA256=${APPIMAGETOOL_SHA256}
         TLS_VERIFY TRUE
@@ -48,7 +53,7 @@ function(deploy TARGET)
     file(CHMOD ${APPIMAGETOOL_EXECUTABLE} PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
     file(
         DOWNLOAD
-        "https://github.com/AppImage/type2-runtime/releases/download/${APPIMAGE_RUNTIME_VERSION}/runtime-${CMAKE_SYSTEM_PROCESSOR}"
+        "https://github.com/omergoktas/type2-runtime/releases/download/${APPIMAGE_RUNTIME_RELEASE}/runtime-${CMAKE_SYSTEM_PROCESSOR}"
         ${APPIMAGE_RUNTIME_FILE}
         EXPECTED_HASH SHA256=${APPIMAGE_RUNTIME_SHA256}
         TLS_VERIFY TRUE

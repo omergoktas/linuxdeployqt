@@ -50,7 +50,7 @@ export QMAKE=/path/to/qt/6.5.0/gcc_64/bin/qmake
 ```
 ## Bundled appimagetool and runtime
 
-linuxdeployqt carries the tools it packs an AppImage with: [appimagetool](https://github.com/AppImage/appimagetool) 1.9.1 and the AppImage project's static [runtime](https://github.com/AppImage/type2-runtime) 20251108, both pinned by checksum in `cmake/Deploy.cmake`. Nothing is downloaded while it runs. An AppImage made with this runtime needs no FUSE library on the machine it runs on, only the `fusermount3` helper that desktop distributions install; where even that is missing, `APPIMAGE_EXTRACT_AND_RUN=1` runs it unpacked. Set `APPIMAGETOOL_RUNTIME_FILE` to pack with another runtime.
+linuxdeployqt carries the tools it packs an AppImage with: [appimagetool](https://github.com/AppImage/appimagetool) 1.9.1 and the AppImage project's static [runtime](https://github.com/AppImage/type2-runtime) 20251108, both pinned by checksum in `cmake/Deploy.cmake`. The two files are built from the AppImage project's source at those tags, with its own build scripts, in this account's forks, [appimagetool](https://github.com/omergoktas/appimagetool) and [type2-runtime](https://github.com/omergoktas/type2-runtime), so each is built from a commit that can be read. Nothing is downloaded while it runs. An AppImage made with this runtime needs no FUSE library on the machine it runs on, only the `fusermount3` helper that desktop distributions install; where even that is missing, `APPIMAGE_EXTRACT_AND_RUN=1` runs it unpacked. Set `APPIMAGETOOL_RUNTIME_FILE` to pack with another runtime.
 
 `-appimage-only` packs an AppDir as it is. Use it after a run without `-appimage`, when the AppDir is changed between the two, for example by a step that adds files.
 
