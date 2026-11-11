@@ -9,7 +9,7 @@ include(Options)
 
 project(linuxdeployqt
     LANGUAGES C CXX
-    VERSION 2.10.0
+    VERSION 3.0.0
     HOMEPAGE_URL omergoktas.com
     DESCRIPTION "Qt dependency deployment tool for Linux."
 )
