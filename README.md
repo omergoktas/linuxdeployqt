@@ -48,6 +48,12 @@ export QMAKE=/path/to/qt/6.5.0/gcc_64/bin/qmake
 # 5. Deploy everything (including essential system libraries)
 ./linuxdeployqt-x86_64.AppImage /path/to/your/executable -qmake=$QMAKE -bundle-everything
 ```
+## Bundled appimagetool and runtime
+
+linuxdeployqt carries the tools it packs an AppImage with: [appimagetool](https://github.com/AppImage/appimagetool) 1.9.1 and the AppImage project's static [runtime](https://github.com/AppImage/type2-runtime) 20251108, both pinned by checksum in `cmake/Deploy.cmake`. Nothing is downloaded while it runs. An AppImage made with this runtime needs no FUSE library on the machine it runs on, only the `fusermount3` helper that desktop distributions install; where even that is missing, `APPIMAGE_EXTRACT_AND_RUN=1` runs it unpacked. Set `APPIMAGETOOL_RUNTIME_FILE` to pack with another runtime.
+
+`-appimage-only` packs an AppDir as it is. Use it after a run without `-appimage`, when the AppDir is changed between the two, for example by a step that adds files.
+
 ## Bundled C++ runtime
 
 A C++ program needs a C++ runtime, `libstdc++.so.6` and `libgcc_s.so.1`, at least as new as the one it was built with. Without it the program stops at startup with an error such as `` version `GLIBCXX_3.4.32' not found ``. Whenever linuxdeployqt bundles non-Qt libraries (`-appimage` or `-bundle-non-qt-libs`), it therefore also bundles the runtime the deployed binaries use on the build machine, so the app runs on systems whose own runtime is older.
