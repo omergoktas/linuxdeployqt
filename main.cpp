@@ -33,6 +33,7 @@ int main(int argc, char* argv[])
 
     bool plugins = true;
     bool appimage = false;
+    bool appimageOnly = false;
     QString appImageOutputPath;
     extern bool runStripEnabled;
     extern bool bundleAllButBlacklistedLibs;
@@ -80,6 +81,10 @@ int main(int argc, char* argv[])
             LogDebug() << "Argument found:" << argument;
             appimage = true;
             bundleAllButBlacklistedLibs = true;
+        } else if (argument == QByteArray("-appimage-only")) {
+            LogDebug() << "Argument found:" << argument;
+            appimage = true;
+            appimageOnly = true;
         } else if (argument.startsWith(QByteArray("-appimage-output="))) {
             LogDebug() << "Argument found:" << argument;
             appImageOutputPath = QString::fromLocal8Bit(
@@ -201,8 +206,11 @@ int main(int argc, char* argv[])
                    "exists.";
         qInfo() << "   -appimage                : Create an AppImage (implies "
                    "-bundle-non-qt-libs).";
+        qInfo()
+            << "   -appimage-only           : Create an AppImage of the AppDir as it "
+               "is, deploying nothing.";
         qInfo() << "   -appimage-output=<path>  : Write the AppImage to the given path "
-                   "(requires -appimage).";
+                   "(requires -appimage or -appimage-only).";
         qInfo()
             << "   -bundle-non-qt-libs      : Also bundle non-core, non-Qt libraries.";
         qInfo() << "   -bundle-everything       : Bundle everything including system "
@@ -269,7 +277,7 @@ int main(int argc, char* argv[])
     }
 
     if (!appImageOutputPath.isEmpty() && !appimage) {
-        LogError() << "-appimage-output requires -appimage\n";
+        LogError() << "-appimage-output requires -appimage or -appimage-only\n";
         return EXIT_FAILURE;
     }
 
@@ -542,6 +550,12 @@ int main(int argc, char* argv[])
             return EXIT_FAILURE;
         }
     }
+
+    // -appimage-only packs the AppDir as it is. It is for an AppDir that an
+    // earlier run of linuxdeployqt has already filled, and that the caller may
+    // have changed since.
+    if (appimageOnly)
+        return createAppImage(appDirPath, appImageOutputPath);
 
     // recurse folders for additional executables
     for (const auto& folder : additionalExecutablesDir) {

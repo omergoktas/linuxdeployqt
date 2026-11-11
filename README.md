@@ -90,8 +90,10 @@ Usage: linuxdeployqt <app-binary|desktop file> [options]
 Options:
    -always-overwrite        : Copy files even if the target file exists.
    -appimage                : Create an AppImage (implies -bundle-non-qt-libs).
+   -appimage-only           : Create an AppImage of the AppDir as it is, deploying
+                              nothing.
    -appimage-output=<path>  : Write the AppImage to the given path (requires
-                              -appimage).
+                              -appimage or -appimage-only).
    -bundle-non-qt-libs      : Also bundle non-core, non-Qt libraries.
    -bundle-everything       : Bundle everything including system libraries.
    -exclude-libs=<list>     : List of libraries which should be excluded,
