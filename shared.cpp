@@ -624,6 +624,84 @@ int containsHowOften(const QStringList& haystack, const QString& needle)
     return haystack.filter(needle).length();
 }
 
+QString runPatchelf(QStringList options);
+
+/*
+    Says whether a library is on the exclude list, by the path ldd gives for it.
+    The ICU libraries never are: a Qt from qt.io brings its own, and no system
+    can be trusted to have the same version.
+*/
+static bool isExcludedLibrary(const QString& path)
+{
+    return !path.contains("libicu")
+           && containsHowOften(excludedLibraries, QFileInfo(path).completeBaseName());
+}
+
+/*
+    Returns the libraries a binary needs directly, by the names its dynamic
+    section gives them, such as libxcb.so.1.
+*/
+static QStringList neededLibraries(const QString& path)
+{
+    static QHash<QString, QStringList> known;
+    const auto found = known.constFind(path);
+    if (found != known.constEnd())
+        return found.value();
+    const QStringList needed
+        = runPatchelf(QStringList() << "--print-needed" << path)
+              .split("\n", QSTRING_SPLIT_BEHAVIOR_NAMESPACE::SkipEmptyParts);
+    known.insert(path, needed);
+    return needed;
+}
+
+/*
+    Returns the dependencies of a binary that it reaches without passing through
+    an excluded library.
+
+    ldd lists every library a binary loads, the libraries of its libraries
+    included. So it also lists what only an excluded library loads, such as
+    libXau, which the system's libxcb needs, or libpng, which the system's
+    FreeType needs. Nothing in the AppDir uses those, and an excluded library
+    has its own libraries beside it on every system, so they stay out. An
+    excluded library that the binary does reach stays in the list;
+    parseLddLibraryLine() leaves it out afterwards.
+*/
+static QList<DylibInfo> dependenciesOutsideExcludedLibraries(
+    const QString& path, const QList<DylibInfo>& dependencies)
+{
+    if (!bundleAllButBlacklistedLibs || bundleEverything)
+        return dependencies;
+
+    QStringList queue = neededLibraries(path);
+    if (queue.isEmpty())
+        return dependencies;
+
+    QHash<QString, QString> pathOfName;
+    for (const DylibInfo& dependency : dependencies)
+        pathOfName.insert(QFileInfo(dependency.binaryPath).fileName(),
+                          dependency.binaryPath);
+
+    QSet<QString> reached;
+    while (!queue.isEmpty()) {
+        const QString libraryPath = pathOfName.value(queue.takeFirst());
+        if (libraryPath.isEmpty() || reached.contains(libraryPath))
+            continue;
+        reached.insert(libraryPath);
+        if (!isExcludedLibrary(libraryPath))
+            queue += neededLibraries(libraryPath);
+    }
+
+    QList<DylibInfo> result;
+    for (const DylibInfo& dependency : dependencies) {
+        if (reached.contains(dependency.binaryPath))
+            result << dependency;
+        else
+            LogDebug() << "Skipping" << dependency.binaryPath
+                       << "which only an excluded library loads";
+    }
+    return result;
+}
+
 LibraryInfo parseLddLibraryLine(const QString& line,
                                 const QString& appDirPath,
                                 const QSet<QString>& rpaths)
@@ -654,12 +732,9 @@ LibraryInfo parseLddLibraryLine(const QString& line,
               Along the way, this also takes care of non-Qt libraries.
             */
             LogDebug() << "Excluded Libraries:" << excludedLibraries;
-            if (!trimmed.contains("libicu")) {
-                if (containsHowOften(excludedLibraries,
-                                     QFileInfo(trimmed).completeBaseName())) {
-                    LogDebug() << "Skipping blacklisted" << trimmed;
-                    return info;
-                }
+            if (isExcludedLibrary(trimmed)) {
+                LogDebug() << "Skipping blacklisted" << trimmed;
+                return info;
             }
         } else {
             /*
@@ -868,7 +943,9 @@ QList<LibraryInfo> getQtLibraries(const QString& path,
                                   const QSet<QString>& rpaths)
 {
     const LddInfo info = findDependencyInfo(path);
-    return getQtLibraries(info.dependencies, appDirPath, rpaths + getBinaryRPaths(path));
+    return getQtLibraries(dependenciesOutsideExcludedLibraries(path, info.dependencies),
+                          appDirPath,
+                          rpaths + getBinaryRPaths(path));
 }
 
 QList<LibraryInfo> getQtLibrariesForPaths(const QStringList& paths,
