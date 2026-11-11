@@ -2366,12 +2366,19 @@ int createAppImage(const QString& appDirPath, const QString& appImageOutputPath)
 
     // linuxdeployqt carries the AppImage runtime beside itself, the one its
     // build pins. Without --runtime-file, appimagetool downloads a runtime from
-    // the network on every run. APPIMAGETOOL_RUNTIME_FILE in the environment is
-    // appimagetool's own way to name another, and stays in force.
-    const QString runtimeFile = QCoreApplication::applicationDirPath()
-                                + "/appimage-runtime";
-    if (QFile::exists(runtimeFile)
-        && !qEnvironmentVariableIsSet("APPIMAGETOOL_RUNTIME_FILE"))
+    // the network on every run and checks nothing about it.
+    // APPIMAGETOOL_RUNTIME_FILE in the environment names another runtime to
+    // pack with. linuxdeployqt hands that file over itself, because the
+    // appimagetool it carries, 1.9.1, does not read the variable.
+    QString runtimeFile = qEnvironmentVariable("APPIMAGETOOL_RUNTIME_FILE");
+    if (!runtimeFile.isEmpty() && !QFile::exists(runtimeFile)) {
+        LogError() << "APPIMAGETOOL_RUNTIME_FILE names a file that does not exist:"
+                   << runtimeFile << "\n";
+        return EXIT_FAILURE;
+    }
+    if (runtimeFile.isEmpty())
+        runtimeFile = QCoreApplication::applicationDirPath() + "/appimage-runtime";
+    if (QFile::exists(runtimeFile))
         arguments << "--runtime-file" << runtimeFile;
     if (!appImageOutputPath.isEmpty())
         arguments << appImageOutputPath;
