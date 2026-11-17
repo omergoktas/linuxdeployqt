@@ -1,6 +1,10 @@
 name: Automated Builds
 
 env:
+  # mise's own version, the one version that cannot be in mise.toml
+  MISE_VERSION: '2026.11.8'
+  # Every tool mise installs must be in mise.lock, with its checksum
+  MISE_LOCKED: '1'
   QT_VERSION: '6.7.3'
 
 on:
@@ -8,112 +12,132 @@ on:
     tags: [ "v*" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# A second run for the same tag waits for the first instead of cancelling it
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
       matrix:
         include:
           - os: ubuntu-22.04
+            host: linux
+            arch: linux_gcc_64
+            folder: gcc_64
           - os: ubuntu-22.04-arm
+            host: linux_arm64
+            arch: linux_gcc_arm64
+            folder: gcc_arm64
 
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
     - name: Download source codes
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        persist-credentials: false
 
-    - name: Install dependencies
+    # mise-action runs `mise install --locked`, which installs the tools of
+    # mise.toml, each checked against its checksum in mise.lock, and
+    # aqtinstall from its version tag. Its own cache stays off, since nothing
+    # checks an installed tool again.
+    - name: Install the tools
+      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      with:
+        version: ${{ env.MISE_VERSION }}
+        cache: false
+        env: false
+
+    # patchelf goes into linuxdeployqt's AppImage, so it stays the one
+    # Ubuntu 22.04 shipped, at that version; apt checks Ubuntu's signature.
+    # The compiler and the system's libraries are the runner image's.
+    - name: Install patchelf
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y build-essential ninja-build patchelf libglib2.0-dev
-        pip install aqtinstall
+        sudo apt-get install -y patchelf=0.14.3-1
+
+    # aqtinstall checks every archive against the checksum on download.qt.io
+    - name: Install Qt
+      env:
+        HOST: ${{ matrix.host }}
+        ARCH: ${{ matrix.arch }}
+      run: mise exec -- aqt install-qt "$HOST" desktop "$QT_VERSION" "$ARCH" -O /tmp/qt
+
+    # CMake is mise's, not the one Qt's qt-cmake script would pick
+    - name: Build
+      env:
+        FOLDER: ${{ matrix.folder }}
+      run: |
+        mise exec -- cmake -S . -B build -G Ninja -D CMAKE_BUILD_TYPE=Release -D "CMAKE_PREFIX_PATH=/tmp/qt/$QT_VERSION/$FOLDER"
+        mise exec -- cmake --build build --parallel
         mkdir executables
-
-    - name: Install Qt
-      if: matrix.os == 'ubuntu-22.04'
-      run: |
-        python3 -m aqt install-qt linux desktop $QT_VERSION linux_gcc_64 -O /tmp/qt
-
-    - name: Install Qt
-      if: matrix.os == 'ubuntu-22.04-arm'
-      run: |
-        python3 -m aqt install-qt linux_arm64 desktop $QT_VERSION linux_gcc_arm64 -O /tmp/qt
-
-    - name: Build for amd64
-      if: matrix.os == 'ubuntu-22.04'
-      run: |
-        chmod +x /tmp/qt/$QT_VERSION/gcc_64/bin/qt-cmake
-        /tmp/qt/$QT_VERSION/gcc_64/bin/qt-cmake \
-          -S . \
-          -B build-amd64 \
-          -G Ninja \
-          -D CMAKE_BUILD_TYPE=Release
-        cmake --build build-amd64 --parallel --config Release
-        cp build-amd64/deploy/*.AppImage executables
-
-    - name: Build for Linux arm64
-      if: matrix.os == 'ubuntu-22.04-arm'
-      run: |
-        chmod +x /tmp/qt/$QT_VERSION/gcc_arm64/bin/qt-cmake
-        /tmp/qt/$QT_VERSION/gcc_arm64/bin/qt-cmake \
-          -S . \
-          -B build-arm64 \
-          -G Ninja \
-          -D CMAKE_BUILD_TYPE=Release
-        cmake --build build-arm64 --parallel --config Release
-        cp build-arm64/deploy/*.AppImage executables
+        cp build/deploy/*.AppImage executables
 
     - name: Check version
       if: startsWith(github.ref, 'refs/tags/v')
       run: |
         # The binary reports the project version from CMakeLists.txt, which must match the tag
-        if ! build-*/linuxdeployqt -version 2>&1 | grep -Fx "linuxdeployqt $GITHUB_REF_NAME"; then
+        if ! build/linuxdeployqt -version 2>&1 | grep -Fx "linuxdeployqt $GITHUB_REF_NAME"; then
           echo "::error::linuxdeployqt does not report $GITHUB_REF_NAME, update the version in CMakeLists.txt"
           exit 1
         fi
 
-    - name: Cache executables for publication
-      uses: actions/cache/save@v4
+    # An artifact belongs to this run alone, so the release job publishes
+    # exactly what this run built
+    - name: Keep executables for publication
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
-        enableCrossOsArchive: true
-        key: ${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+        name: executables-${{ matrix.os }}
         path: executables
+        if-no-files-found: error
+        retention-days: 1
 
   release:
     name: Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
-    concurrency: release-${{ github.ref }}
+    timeout-minutes: 15
     permissions:
       contents: write
 
     steps:
     # The full history and the tags are needed to find the previous version
     - name: Download source codes
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         fetch-depth: 0
         fetch-tags: true
+        persist-credentials: false
 
-    - name: Restore Linux amd64 executables
-      uses: actions/cache/restore@v4
+    # Installs mise alone; the two steps below name gh and jq, which mise then
+    # installs as mise.lock records them
+    - name: Install mise
+      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
       with:
-        fail-on-cache-miss: true
-        key: ubuntu-22.04-${{ github.run_id }}-${{ github.run_attempt }}
-        path: executables
+        version: ${{ env.MISE_VERSION }}
+        install: false
+        cache: false
+        env: false
 
-    - name: Restore Linux arm64 executables
-      uses: actions/cache/restore@v4
+    - name: Fetch the executables
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
-        fail-on-cache-miss: true
-        key: ubuntu-22.04-arm-${{ github.run_id }}-${{ github.run_attempt }}
+        pattern: executables-*
+        merge-multiple: true
         path: executables
 
     # Every commit since the previous version, credited to its author's GitHub
     # account, so that GitHub shows each author's avatar under the release
     - name: Write release notes
+      shell: mise exec gh jq -- bash --noprofile --norc -eo pipefail {0}
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -148,6 +172,7 @@ jobs:
 
     - name: Publish versioned release
       working-directory: executables
+      shell: mise exec gh -- bash --noprofile --norc -eo pipefail {0}
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GH_REPO: ${{ github.repository }}

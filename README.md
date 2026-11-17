@@ -21,6 +21,8 @@ cmake -S linuxdeployqt -B build -DCMAKE_PREFIX_PATH=/path/to/qt/6.7.3/gcc_64
 cmake --build build --parallel
 ```
 
+The released binaries are built by `.github/workflows/build.yaml` with tools at fixed versions: [mise](https://mise.jdx.dev) installs Python, CMake, Ninja and [this account's fork of aqtinstall](https://github.com/omergoktas/aqtinstall), which installs Qt, as `mise.toml` names them, and checks each download against its checksum in `mise.lock`. The workflow's actions are named by commit, and patchelf, which goes into the AppImage, is Ubuntu 22.04's at its version 0.14.3. To build the same way, run `mise install` in the clone, then the commands above through `mise exec --`.
+
 ## Usage
 
 A few examples demonstrating different use cases:
