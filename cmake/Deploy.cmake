@@ -28,13 +28,13 @@ function(deploy TARGET)
     # each file is built from a commit that can be read, with its build log
     # kept. To move to newer ones, release them in the forks first, then change
     # the releases and the four checksums here together.
-    set(APPIMAGETOOL_RELEASE 1.9.1-1)
+    set(APPIMAGETOOL_RELEASE 1.9.1-2)
     set(APPIMAGE_RUNTIME_RELEASE 20251108-1)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-        set(APPIMAGETOOL_SHA256 2eb9321e9c1790f5297f16ddc3187c6a17c4772abcfaf0efc49bec85456730bd)
+        set(APPIMAGETOOL_SHA256 003fcd2ed02ba3978261b07ebfb05fc8fb28376a93aaf99add52430e9a7217c4)
         set(APPIMAGE_RUNTIME_SHA256 7afaed97f0ea1c30c68e6beb3a0528db4398fe4e6b4f1a23f2077957277fecdf)
     elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-        set(APPIMAGETOOL_SHA256 d698e03521232c46a88c1f9f19ac18019142409dcc9dcc073fd47a4ec0a17e4f)
+        set(APPIMAGETOOL_SHA256 f140e9936d77bb1a1e3c399f27f37d1f76722416244c1caedc3b6aad3741b87f)
         set(APPIMAGE_RUNTIME_SHA256 10d582ecc70c2836afee511cfc79ea6e8733ca686cb2258d86b3c4fec1b84b0b)
     else()
         message(FATAL_ERROR "No appimagetool is pinned for ${CMAKE_SYSTEM_PROCESSOR}.")
