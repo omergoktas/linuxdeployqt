@@ -793,7 +793,10 @@ LibraryInfo parseLddLibraryLine(const QString& line,
     // Split the line into [Qt-path]/lib/qt[Module].library/Versions/[Version]/
     QStringList parts = trimmed.split("/");
     while (part < parts.count()) {
-        const QString currentPart = parts.at(part).simplified();
+        // A folder name is taken as it is: two spaces in a row, or a space at
+        // either end, are part of it, and squeezing them made a path that does
+        // not exist.
+        const QString currentPart = parts.at(part);
         ++part;
         if (currentPart == "")
             continue;
@@ -801,8 +804,7 @@ LibraryInfo parseLddLibraryLine(const QString& line,
         if (state == QtPath) {
             // Check for library name part
             if (part < parts.count() && parts.at(part).contains(".so")) {
-                info.libraryDirectory += "/"
-                                         + (qtPath + currentPart + "/").simplified();
+                info.libraryDirectory += "/" + qtPath + currentPart + "/";
                 LogDebug() << "info.libraryDirectory:" << info.libraryDirectory;
                 state = LibraryName;
                 continue;
