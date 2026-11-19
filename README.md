@@ -141,3 +141,7 @@ to be used instead.
 
 Plugins related to a Qt library are copied in with the library.
 ```
+
+## License
+
+linuxdeployqt is free software under the GNU General Public License, version 3, in [LICENSE.txt](LICENSE.txt), as the upstream project it comes from is. Its code from Qt's macdeployqt, in `main.cpp`, `shared.cpp` and `shared.h`, keeps Qt's license header, under which it may also be used with a commercial Qt license.
