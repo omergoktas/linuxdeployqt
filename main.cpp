@@ -328,13 +328,7 @@ int main(int argc, char* argv[])
             }
             QSettings* settings = 0;
             settings = new QSettings(firstArgument, QSettings::IniFormat);
-            desktopExecEntry = settings->value("Desktop Entry/Exec", "r")
-                                   .toString()
-                                   .split(' ')
-                                   .first()
-                                   .split('/')
-                                   .last()
-                                   .trimmed();
+            desktopExecEntry = QFileInfo(desktopExecProgram(firstArgument)).fileName();
             qDebug() << "desktopExecEntry:" << desktopExecEntry;
             desktopFile = firstArgument;
             desktopIconEntry = settings->value("Desktop Entry/Icon", "r")
@@ -461,7 +455,33 @@ int main(int argc, char* argv[])
     if (appRun.exists()) {
         qDebug() << "Keeping existing AppRun";
     } else {
-        if (QFile::copy(":/assets/AppRun", appDirPath + "/AppRun")) {
+        /* AppRun starts the program that the desktop file's Exec key names, read
+         * here by the specification's rules and written into AppRun quoted for
+         * the shell; AppRun used to cut the key at its first space when it ran,
+         * so a quoted name, or one with a space, never started. Without a
+         * desktop file, or an Exec key in it, AppRun starts the app binary. */
+        QString execDesktopFile = desktopFile;
+        if (execDesktopFile.isEmpty()) {
+            const QStringList desktopFiles
+                = QDir(appDirPath)
+                      .entryList(QStringList() << "*.desktop", QDir::Files, QDir::Name);
+            if (!desktopFiles.isEmpty()) {
+                execDesktopFile = appDirPath + "/" + desktopFiles.first();
+            }
+        }
+        const QString execProgram = execDesktopFile.isEmpty()
+                                        ? QString()
+                                        : desktopExecProgram(execDesktopFile);
+        const QString exec = execProgram.isEmpty()
+                                 ? "\"${HERE}\"/" + shellQuoted(relativeBinPath)
+                                 : shellQuoted(execProgram);
+        qDebug() << "AppRun starts:" << exec;
+        QFile asset(":/assets/AppRun");
+        if (asset.open(QIODevice::ReadOnly) && appRun.open(QIODevice::WriteOnly)) {
+            appRun.write(QString::fromUtf8(asset.readAll())
+                             .replace(QStringLiteral("@EXEC@"), exec)
+                             .toUtf8());
+            appRun.close();
             if (!QFile::setPermissions(appDirPath + "/AppRun",
                                        QFile::ReadOwner | QFile::ReadGroup
                                            | QFile::ReadOther | QFile::ExeOwner
@@ -470,7 +490,7 @@ int main(int argc, char* argv[])
                 LogError() << "Could not set permissions on AppRun";
             }
         } else {
-            LogError() << "Could not copy AppRun";
+            LogError() << "Could not write AppRun";
         }
     }
 

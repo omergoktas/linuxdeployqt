@@ -2389,6 +2389,89 @@ void deployCxxRuntime(const QString& appDirPath, const QStringList& binaryPaths)
     }
 }
 
+/*
+    Gives the program that a desktop file's Exec key starts, read as the Desktop
+    Entry Specification says: the key's value in the [Desktop Entry] group, with
+    the escapes of a string value, \s, \n, \t, \r and \\, first replaced, then
+    its first argument, which may be quoted with double quotes, inside which
+    \", \`, \$ and \\ stand for the character after the backslash, and in which
+    %% stands for a percent sign. Splitting the value at its first space instead
+    left the quotes in and cut a quoted name with a space in two. Gives an empty
+    string when the file has no Exec key there.
+*/
+QString desktopExecProgram(const QString& desktopFilePath)
+{
+    QFile file(desktopFilePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return QString();
+    }
+    QString value;
+    bool inDesktopEntry = false;
+    bool found = false;
+    while (!file.atEnd() && !found) {
+        const QString line = QString::fromUtf8(file.readLine()).trimmed();
+        if (line.startsWith('[')) {
+            inDesktopEntry = line == QLatin1String("[Desktop Entry]");
+            continue;
+        }
+        const int equals = line.indexOf('=');
+        if (inDesktopEntry && equals > 0
+            && line.left(equals).trimmed() == QLatin1String("Exec")) {
+            value = line.mid(equals + 1).trimmed();
+            found = true;
+        }
+    }
+
+    QString unescaped;
+    for (int i = 0; i < value.size(); ++i) {
+        if (value.at(i) == '\\' && i + 1 < value.size()) {
+            const QChar next = value.at(++i);
+            if (next == 's') {
+                unescaped += ' ';
+            } else if (next == 'n') {
+                unescaped += '\n';
+            } else if (next == 't') {
+                unescaped += '\t';
+            } else if (next == 'r') {
+                unescaped += '\r';
+            } else if (next == '\\') {
+                unescaped += '\\';
+            } else {
+                unescaped += '\\';
+                unescaped += next;
+            }
+        } else {
+            unescaped += value.at(i);
+        }
+    }
+
+    QString program;
+    if (unescaped.startsWith('"')) {
+        for (int i = 1; i < unescaped.size() && unescaped.at(i) != '"'; ++i) {
+            if (unescaped.at(i) == '\\' && i + 1 < unescaped.size()
+                && QStringLiteral("\"`$\\").contains(unescaped.at(i + 1))) {
+                ++i;
+            }
+            program += unescaped.at(i);
+        }
+    } else {
+        for (int i = 0; i < unescaped.size() && unescaped.at(i) != ' '; ++i) {
+            program += unescaped.at(i);
+        }
+    }
+    program.replace(QStringLiteral("%%"), QStringLiteral("%"));
+    return program;
+}
+
+/* Gives text quoted for a POSIX shell: in single quotes, with a single quote
+   itself written as '\'' */
+QString shellQuoted(const QString& text)
+{
+    QString quoted = text;
+    quoted.replace(QStringLiteral("'"), QStringLiteral("'\\''"));
+    return QStringLiteral("'") + quoted + QStringLiteral("'");
+}
+
 int createAppImage(const QString& appDirPath, const QString& appImageOutputPath)
 {
     QStringList arguments{"-v", appDirPath, "-n"};

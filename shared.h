@@ -149,6 +149,8 @@ QString findAppBinary(const QString& appDirPath);
 QStringList findAppLibraries(const QString& appDirPath);
 bool patchQtCore(const QString& path, const QString& variable, const QString& value);
 void deployCxxRuntime(const QString& appDirPath, const QStringList& binaryPaths);
+QString desktopExecProgram(const QString& desktopFilePath);
+QString shellQuoted(const QString& text);
 int createAppImage(const QString& appBundlePath,
                    const QString& appImageOutputPath = QString());
 bool checkAppImagePrerequisites(const QString& appBundlePath);
