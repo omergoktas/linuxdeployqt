@@ -114,8 +114,10 @@ jobs:
   # ubuntu:24.04 container, with no binutils, file or patchelf, it starts, then
   # deploys a Qt program into an AppImage, strips its libraries and packs it.
   # The sample is linuxdeployqt's own build-tree program, whose Qt Core links
-  # the system's GLib, so the container gets that one library for the sample,
-  # once linuxdeployqt has started without it.
+  # the system's GLib. Once linuxdeployqt has started without anything, the
+  # container gets what the test itself needs, none of which linuxdeployqt
+  # runs: curl and the CA certificates, with which mise-action fetches mise,
+  # and that one library for the sample.
   bare:
     name: Deploy in a bare container on ${{ matrix.runner }}
     needs: build
@@ -167,6 +169,11 @@ jobs:
         chmod +x "executables/$APPIMAGE" sample/linuxdeployqt
         "executables/$APPIMAGE" -version
 
+    - name: Install what the test needs
+      run: |
+        apt-get update -y
+        apt-get install -y --no-install-recommends curl ca-certificates libglib2.0-0t64
+
     - name: Install the tools
       uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
       with:
@@ -180,11 +187,6 @@ jobs:
         HOST: ${{ matrix.host }}
         ARCH: ${{ matrix.arch }}
       run: mise exec -- aqt install-qt "$HOST" desktop "$QT_VERSION" "$ARCH" -O /tmp/qt
-
-    - name: Install the sample's GLib
-      run: |
-        apt-get update -y
-        apt-get install -y --no-install-recommends libglib2.0-0t64
 
     - name: Deploy the sample and start its AppImage
       env:
