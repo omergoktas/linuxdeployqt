@@ -917,53 +917,40 @@ QList<LibraryInfo> getQtLibraries(const QList<DylibInfo>& dependencies,
     return libraries;
 }
 
-// TODO: Switch the following to using patchelf
+// Reads a binary's run path with patchelf, which linuxdeployqt carries beside
+// itself, so that no objdump from binutils is needed on the machine. patchelf
+// prints the DT_RUNPATH entry, or the older DT_RPATH when the binary has only
+// that one; the dynamic linker searches either.
 QSet<QString> getBinaryRPaths(const QString& path,
                               bool resolve = true,
                               QString executablePath = QString())
 {
     QSet<QString> rpaths;
 
-    QProcess objdump;
-    objdump.setProcessEnvironment(systemEnvironment());
-    objdump.start("objdump", QStringList() << "-x" << path);
+    QProcess patchelf;
+    patchelf.start("patchelf", QStringList() << "--print-rpath" << path);
 
-    if (!objdump.waitForStarted()) {
-        if (objdump.errorString().contains("execvp: No such file or directory")) {
-            LogError() << "Could not start objdump.";
-            LogError() << "Make sure it is installed on your $PATH.";
-        } else {
-            LogError() << "Could not start objdump. Process error is"
-                       << objdump.errorString();
-        }
+    if (!patchelf.waitForStarted()) {
+        LogError() << "Could not start patchelf. Process error is"
+                   << patchelf.errorString();
         exit(1);
     }
 
-    objdump.waitForFinished(-1);
+    patchelf.waitForFinished(-1);
 
-    if (objdump.exitCode() != 0) {
-        LogError() << "getBinaryRPaths:" << objdump.readAllStandardError();
+    if (patchelf.exitCode() != 0) {
+        LogError() << "getBinaryRPaths:" << patchelf.readAllStandardError();
     }
 
     if (resolve && executablePath.isEmpty()) {
         executablePath = path;
     }
 
-    QString output = objdump.readAllStandardOutput();
-    QStringList outputLines = output.split("\n");
-    QStringListIterator i(outputLines);
-
-    while (i.hasNext()) {
-        if (i.next().contains("RUNPATH") && i.hasNext()) {
-            i.previous();
-            const QString& rpathCmd = i.next();
-            int pathStart = rpathCmd.indexOf("RUNPATH");
-            if (pathStart >= 0) {
-                QString rpath = rpathCmd.mid(pathStart + 8).trimmed();
-                LogDebug() << "rpath:" << rpath;
-                rpaths << rpath;
-            }
-        }
+    const QString rpath
+        = QString::fromLocal8Bit(patchelf.readAllStandardOutput()).trimmed();
+    if (!rpath.isEmpty()) {
+        LogDebug() << "rpath:" << rpath;
+        rpaths << rpath;
     }
 
     return rpaths;
@@ -1271,13 +1258,21 @@ void runStrip(const QString& binaryPath)
         return;
     }
 
-    LogDebug() << "Using strip:";
+    // linuxdeployqt's AppImage carries binutils' strip beside it, with the
+    // library strip loads, which its run path finds without LD_LIBRARY_PATH,
+    // so that it strips on a machine without binutils. Run from a build tree,
+    // it takes the strip on PATH.
+    QString stripProgram = QCoreApplication::applicationDirPath() + "/strip";
+    if (!QFileInfo(stripProgram).isExecutable())
+        stripProgram = "strip";
+
+    LogDebug() << "Using strip:" << stripProgram;
     LogDebug() << " stripping" << resolvedPath;
     QProcess strip;
     QProcessEnvironment stripEnv(systemEnvironment());
     stripEnv.remove("LD_LIBRARY_PATH");
     strip.setProcessEnvironment(stripEnv);
-    strip.start("strip", QStringList() << resolvedPath);
+    strip.start(stripProgram, QStringList() << resolvedPath);
     if (!strip.waitForStarted()) {
         if (strip.errorString().contains("execvp: No such file or directory")) {
             LogError() << "Could not start strip.";

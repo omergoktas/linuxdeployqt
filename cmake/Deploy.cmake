@@ -16,7 +16,13 @@ function(deploy TARGET)
     endif()
     set(APPIMAGE_OUTPUT_PATH ${APP_DEPLOY_PREFIX}/${TARGET}-${APPIMAGE_OUTPUT_ARCH}.AppImage)
 
+    # linuxdeployqt carries every program it runs on the binaries it deploys,
+    # except ldd, which every glibc system has, so that it works on a bare
+    # system such as an ubuntu container: patchelf, which also reads the run
+    # paths, and binutils' strip. strip loads binutils' libbfd, which the
+    # deployment below copies beside linuxdeployqt's own libraries.
     find_program(PATCHELF_EXECUTABLE patchelf REQUIRED)
+    find_program(STRIP_EXECUTABLE strip REQUIRED)
 
     # linuxdeployqt carries appimagetool and the AppImage runtime, both pinned
     # here by release and SHA-256, and packs itself with them. The runtime is
@@ -26,15 +32,16 @@ function(deploy TARGET)
     # and github.com/omergoktas/type2-runtime, which build the project's source
     # at its tags 1.9.1 and 20251108 with the project's own build scripts, so
     # each file is built from a commit that can be read, with its build log
-    # kept. To move to newer ones, release them in the forks first, then change
-    # the releases and the four checksums here together.
-    set(APPIMAGETOOL_RELEASE 1.9.1-2)
+    # kept. appimagetool's release 1.9.1-3 no longer asks for the file command,
+    # which it never runs. To move to newer ones, release them in the forks
+    # first, then change the releases and the four checksums here together.
+    set(APPIMAGETOOL_RELEASE 1.9.1-3)
     set(APPIMAGE_RUNTIME_RELEASE 20251108-1)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-        set(APPIMAGETOOL_SHA256 003fcd2ed02ba3978261b07ebfb05fc8fb28376a93aaf99add52430e9a7217c4)
+        set(APPIMAGETOOL_SHA256 4cfcece932f9eebff6bce8cea50f965b977cc5892420ae8af6802f1155d1026e)
         set(APPIMAGE_RUNTIME_SHA256 7afaed97f0ea1c30c68e6beb3a0528db4398fe4e6b4f1a23f2077957277fecdf)
     elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-        set(APPIMAGETOOL_SHA256 f140e9936d77bb1a1e3c399f27f37d1f76722416244c1caedc3b6aad3741b87f)
+        set(APPIMAGETOOL_SHA256 5254f57a74e49f6ae6541201b53130db2d8e980774190aa12217f373eec4f1a6)
         set(APPIMAGE_RUNTIME_SHA256 10d582ecc70c2836afee511cfc79ea6e8733ca686cb2258d86b3c4fec1b84b0b)
     else()
         message(FATAL_ERROR "No appimagetool is pinned for ${CMAKE_SYSTEM_PROCESSOR}.")
@@ -97,9 +104,13 @@ function(deploy TARGET)
 
     add_custom_command(TARGET deploy VERBATIM POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${PATCHELF_EXECUTABLE} $<TARGET_FILE:${TARGET}> ${DEPLOY_PREFIX_PATH}/usr/bin
+        ${PATCHELF_EXECUTABLE} ${STRIP_EXECUTABLE} $<TARGET_FILE:${TARGET}>
+        ${DEPLOY_PREFIX_PATH}/usr/bin
     )
 
+    # -executable gives strip the deployed libraries too, libbfd among them,
+    # through a run path, since linuxdeployqt starts it without
+    # LD_LIBRARY_PATH.
     add_custom_command(TARGET deploy VERBATIM POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E env
         ARCH=${CMAKE_SYSTEM_PROCESSOR}
@@ -107,6 +118,7 @@ function(deploy TARGET)
         --
         $<TARGET_FILE:${TARGET}>
         ${DEPLOY_PREFIX_PATH}/usr/bin/$<TARGET_FILE_NAME:${TARGET}>
+        -executable=${DEPLOY_PREFIX_PATH}/usr/bin/strip
         -appimage -appimage-output=${APPIMAGE_OUTPUT_PATH}
         -no-translations -qmake=${QMAKE_EXECUTABLE}
         WORKING_DIRECTORY ${APP_DEPLOY_PREFIX}

@@ -45,8 +45,8 @@ jobs:
         persist-credentials: false
 
     # mise-action runs `mise install --locked`, which installs the tools of
-    # mise.toml, each checked against its checksum in mise.lock, and
-    # aqtinstall from its version tag. Its own cache stays off, since nothing
+    # mise.toml, each checked against its checksum in mise.lock, aqtinstall's
+    # standalone program among them. Its own cache stays off, since nothing
     # checks an installed tool again.
     - name: Install the tools
       uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
@@ -57,7 +57,8 @@ jobs:
 
     # patchelf goes into linuxdeployqt's AppImage, so it stays the one
     # Ubuntu 22.04 shipped, at that version; apt checks Ubuntu's signature.
-    # The compiler and the system's libraries are the runner image's.
+    # The compiler, the system's libraries and binutils, whose strip goes into
+    # the AppImage too, are the runner image's.
     - name: Install patchelf
       run: |
         sudo apt-get update -y
@@ -99,9 +100,108 @@ jobs:
         if-no-files-found: error
         retention-days: 1
 
+    # The build tree's own linuxdeployqt, a Qt Core program, which the bare job
+    # deploys as a sample
+    - name: Keep the sample program
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: sample-${{ matrix.os }}
+        path: build/linuxdeployqt
+        if-no-files-found: error
+        retention-days: 1
+
+  # Proves that the AppImage carries every program it runs: in a bare
+  # ubuntu:24.04 container, with no binutils, file or patchelf, it starts, then
+  # deploys a Qt program into an AppImage, strips its libraries and packs it.
+  # The sample is linuxdeployqt's own build-tree program, whose Qt Core links
+  # the system's GLib, so the container gets that one library for the sample,
+  # once linuxdeployqt has started without it.
+  bare:
+    name: Deploy in a bare container on ${{ matrix.runner }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            runner: ubuntu-24.04
+            appimage: linuxdeployqt-x86_64.AppImage
+            host: linux
+            arch: linux_gcc_64
+            folder: gcc_64
+          - os: ubuntu-22.04-arm
+            runner: ubuntu-24.04-arm
+            appimage: linuxdeployqt-arm64.AppImage
+            host: linux_arm64
+            arch: linux_gcc_arm64
+            folder: gcc_arm64
+    runs-on: ${{ matrix.runner }}
+    # ubuntu:24.04's image index of 23 November 2026, which names the image of
+    # each architecture
+    container: ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289
+    timeout-minutes: 20
+    env:
+      APPIMAGE: ${{ matrix.appimage }}
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+
+    steps:
+    - name: Download source codes
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+
+    - name: Fetch the AppImage
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: executables-${{ matrix.os }}
+        path: executables
+
+    - name: Fetch the sample program
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: sample-${{ matrix.os }}
+        path: sample
+
+    - name: Start linuxdeployqt with nothing installed
+      run: |
+        chmod +x "executables/$APPIMAGE" sample/linuxdeployqt
+        "executables/$APPIMAGE" -version
+
+    - name: Install the tools
+      uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      with:
+        version: ${{ env.MISE_VERSION }}
+        cache: false
+        env: false
+
+    # At the place the build job had it, which the sample's run path names
+    - name: Install Qt
+      env:
+        HOST: ${{ matrix.host }}
+        ARCH: ${{ matrix.arch }}
+      run: mise exec -- aqt install-qt "$HOST" desktop "$QT_VERSION" "$ARCH" -O /tmp/qt
+
+    - name: Install the sample's GLib
+      run: |
+        apt-get update -y
+        apt-get install -y --no-install-recommends libglib2.0-0t64
+
+    - name: Deploy the sample and start its AppImage
+      env:
+        FOLDER: ${{ matrix.folder }}
+      run: |
+        mkdir -p sample.AppDir/usr/bin
+        cp sample/linuxdeployqt sample.AppDir/usr/bin/sample
+        cp deploy/icon.svg sample.AppDir/sample.svg
+        printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=sample' 'Exec=sample' \
+          'Icon=sample' 'Terminal=true' 'Categories=Development;' > sample.AppDir/sample.desktop
+        "executables/$APPIMAGE" sample.AppDir/usr/bin/sample -qmake="/tmp/qt/$QT_VERSION/$FOLDER/bin/qmake" \
+          -no-translations -appimage -appimage-output=sample.AppImage
+        ./sample.AppImage -version
+
   release:
     name: Release
-    needs: build
+    needs: [build, bare]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     timeout-minutes: 15

@@ -1,18 +1,24 @@
 # The tools that build linuxdeployqt, each at one version. mise.lock holds the
 # file and the checksum of each for both Linux architectures, and mise refuses
 # a download that does not match. aqtinstall is this account's fork, installed
-# from its version tag, and that version pins every package it takes.
+# as the standalone program its release carries, which needs no Python and
+# pins every package it takes.
 min_version = "2026.11.8"
 
 [settings]
 lockfile_platforms = ["linux-x64", "linux-arm64"]
 
 [tools]
-python = "3.12.16"
-uv = "0.13.7"
 cmake = "4.2.8"
 ninja = "1.13.2"
-"pipx:omergoktas/aqtinstall" = "v4.4.0"
 # Only the release job installs these, by name
 gh = { version = "2.103.3", lazy = true }
 jq = { version = "1.8.2", lazy = true }
+
+[tools."github:omergoktas/aqtinstall"]
+version = "4.4.1"
+bin = "aqt"
+
+[tools."github:omergoktas/aqtinstall".platforms]
+linux-x64 = { asset_pattern = "aqt-linux-amd64" }
+linux-arm64 = { asset_pattern = "aqt-linux-arm64" }

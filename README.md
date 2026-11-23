@@ -15,13 +15,13 @@ You can download the latest pre-built binary for [**x86_64**](https://github.com
 
 ```bash
 # CMAKE_PREFIX_PATH should point to your Qt installation (Qt 6.7.3 or newer);
-# patchelf must be installed
+# patchelf and binutils must be installed
 git clone https://github.com/omergoktas/linuxdeployqt
 cmake -S linuxdeployqt -B build -DCMAKE_PREFIX_PATH=/path/to/qt/6.7.3/gcc_64
 cmake --build build --parallel
 ```
 
-The released binaries are built by `.github/workflows/build.yaml` with tools at fixed versions: [mise](https://mise.jdx.dev) installs Python, CMake, Ninja and [this account's fork of aqtinstall](https://github.com/omergoktas/aqtinstall), which installs Qt, as `mise.toml` names them, and checks each download against its checksum in `mise.lock`. The workflow's actions are named by commit, and patchelf, which goes into the AppImage, is Ubuntu 22.04's at its version 0.14.3. To build the same way, run `mise install` in the clone, then the commands above through `mise exec --`.
+The released binaries are built by `.github/workflows/build.yaml` with tools at fixed versions: [mise](https://mise.jdx.dev) installs CMake, Ninja and the standalone program of [this account's fork of aqtinstall](https://github.com/omergoktas/aqtinstall), which installs Qt, as `mise.toml` names them, and checks each download against its checksum in `mise.lock`. The workflow's actions are named by commit, patchelf, which goes into the AppImage, is Ubuntu 22.04's at its version 0.14.3, and so is binutils' strip, which goes in too. To build the same way, run `mise install` in the clone, then the commands above through `mise exec --`.
 
 ## Usage
 
@@ -52,7 +52,9 @@ export QMAKE=/path/to/qt/6.5.0/gcc_64/bin/qmake
 ```
 ## Bundled appimagetool and runtime
 
-linuxdeployqt carries the tools it packs an AppImage with: [appimagetool](https://github.com/AppImage/appimagetool) 1.9.1, which checks the desktop file with desktop-file-utils 0.29, and the AppImage project's static [runtime](https://github.com/AppImage/type2-runtime) 20251108, both pinned by checksum in `cmake/Deploy.cmake`. The two files are built from the AppImage project's source at those tags, with its own build scripts, in this account's forks, [appimagetool](https://github.com/omergoktas/appimagetool) and [type2-runtime](https://github.com/omergoktas/type2-runtime), so each is built from a commit that can be read. Nothing is downloaded while it runs. An AppImage made with this runtime needs no FUSE library on the machine it runs on, only the `fusermount3` helper that desktop distributions install; where even that is missing, `APPIMAGE_EXTRACT_AND_RUN=1` runs it unpacked. Set `APPIMAGETOOL_RUNTIME_FILE` to pack with another runtime.
+linuxdeployqt carries the tools it packs an AppImage with: [appimagetool](https://github.com/AppImage/appimagetool) 1.9.1, which checks the desktop file with desktop-file-utils 0.29 and, in this account's release 1.9.1-3, no longer asks for the `file` command, which it never runs, and the AppImage project's static [runtime](https://github.com/AppImage/type2-runtime) 20251108, both pinned by checksum in `cmake/Deploy.cmake`. The two files are built from the AppImage project's source at those tags, with its own build scripts, in this account's forks, [appimagetool](https://github.com/omergoktas/appimagetool) and [type2-runtime](https://github.com/omergoktas/type2-runtime), so each is built from a commit that can be read. Nothing is downloaded while it runs. An AppImage made with this runtime needs no FUSE library on the machine it runs on, only the `fusermount3` helper that desktop distributions install; where even that is missing, `APPIMAGE_EXTRACT_AND_RUN=1` runs it unpacked. Set `APPIMAGETOOL_RUNTIME_FILE` to pack with another runtime.
+
+It also carries the programs it runs on the binaries it deploys, patchelf, which reads and sets their run paths, and binutils' strip, so it needs nothing on the machine beyond `ldd`, which every glibc system has: it runs in a bare `ubuntu:24.04` container, as the workflow's `bare` job checks before every release.
 
 `-appimage-only` packs an AppDir as it is. Use it after a run without `-appimage`, when the AppDir is changed between the two, for example by a step that adds files.
 
