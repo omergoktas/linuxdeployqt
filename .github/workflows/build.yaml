@@ -112,10 +112,10 @@ jobs:
 
   # Proves that the AppImage carries every program it runs: in a bare
   # ubuntu:24.04 container, with no binutils, file or patchelf, it starts, then
-  # deploys a Qt program into an AppImage, strips its libraries and packs it.
-  # The sample is linuxdeployqt's own build-tree program, whose Qt Core links
-  # the system's GLib. Once linuxdeployqt has started without anything, the
-  # container gets what the test itself needs, none of which linuxdeployqt
+  # deploys a Qt program into an AppImage, strips a helper program and packs
+  # it. The sample is linuxdeployqt's own build-tree program, whose Qt Core
+  # links the system's GLib. Once linuxdeployqt has started without anything,
+  # the container gets what the test itself needs, none of which linuxdeployqt
   # runs: curl and the CA certificates, with which mise-action fetches mise,
   # and that one library for the sample.
   bare:
@@ -145,6 +145,10 @@ jobs:
     env:
       APPIMAGE: ${{ matrix.appimage }}
       APPIMAGE_EXTRACT_AND_RUN: '1'
+    # Named, bash also stops on a failure inside a pipe
+    defaults:
+      run:
+        shell: bash
 
     steps:
     - name: Download source codes
@@ -188,17 +192,30 @@ jobs:
         ARCH: ${{ matrix.arch }}
       run: mise exec -- aqt install-qt "$HOST" desktop "$QT_VERSION" "$ARCH" -O /tmp/qt
 
+    # linuxdeployqt strips a binary only while its run path does not start
+    # with $ORIGIN, which it gives the app's own binary before stripping it,
+    # so the sample also goes in as a helper with -executable, which is
+    # stripped first, with its build-tree run path. The log must show the
+    # strip the AppImage carries, and the helper must come out smaller.
     - name: Deploy the sample and start its AppImage
       env:
         FOLDER: ${{ matrix.folder }}
       run: |
         mkdir -p sample.AppDir/usr/bin
         cp sample/linuxdeployqt sample.AppDir/usr/bin/sample
+        cp sample/linuxdeployqt sample.AppDir/usr/bin/helper
         cp deploy/icon.svg sample.AppDir/sample.svg
         printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=sample' 'Exec=sample' \
           'Icon=sample' 'Terminal=true' 'Categories=Development;' > sample.AppDir/sample.desktop
-        "executables/$APPIMAGE" sample.AppDir/usr/bin/sample -qmake="/tmp/qt/$QT_VERSION/$FOLDER/bin/qmake" \
-          -no-translations -appimage -appimage-output=sample.AppImage
+        "executables/$APPIMAGE" sample.AppDir/usr/bin/sample -executable=sample.AppDir/usr/bin/helper \
+          -qmake="/tmp/qt/$QT_VERSION/$FOLDER/bin/qmake" -no-translations -verbose=3 \
+          -appimage -appimage-output=sample.AppImage 2>&1 | tee deploy.log
+        grep -E 'Using strip: ".*/usr/bin/strip"' deploy.log
+        if grep -F 'Error stripping' deploy.log; then exit 1; fi
+        before=$(stat -c %s sample/linuxdeployqt)
+        after=$(stat -c %s sample.AppDir/usr/bin/helper)
+        echo "helper: $before bytes before, $after after"
+        test "$after" -lt "$before"
         ./sample.AppImage -version
 
   release:
